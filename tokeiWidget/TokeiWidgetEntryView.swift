@@ -48,9 +48,17 @@ struct SmallTimeZoneWidget: View {
                         }
                         
                         HStack {
-                            Text(timeZone.formattedTime)
-                                .font(.caption)
-                                .fontWeight(.semibold)
+                            VStack(alignment: .leading, spacing: 1) {
+                                Text(timeZone.formattedTime)
+                                    .font(.caption)
+                                    .fontWeight(.semibold)
+                                
+                                if !timeZone.formattedDateForDifference.isEmpty {
+                                    Text(timeZone.formattedDateForDifference)
+                                        .font(.caption2)
+                                        .foregroundColor(.orange)
+                                }
+                            }
                             
                             Spacer()
                             
@@ -91,10 +99,18 @@ struct MediumTimeZoneWidget: View {
                         
                         Spacer()
                         
-                        Text(timeZone.formattedTime)
-                            .font(.title3)
-                            .fontWeight(.bold)
-                            .foregroundColor(timeZone.timeOffset == "Now" ? .green : .primary)
+                        VStack(alignment: .trailing, spacing: 1) {
+                            Text(timeZone.formattedTime)
+                                .font(.title3)
+                                .fontWeight(.bold)
+                                .foregroundColor(timeZone.timeOffset == "Now" ? .green : .primary)
+                            
+                            if !timeZone.formattedDateForDifference.isEmpty {
+                                Text(timeZone.formattedDateForDifference)
+                                    .font(.caption2)
+                                    .foregroundColor(.orange)
+                            }
+                        }
                     }
                 }
             }
@@ -103,10 +119,10 @@ struct MediumTimeZoneWidget: View {
                         HStack(spacing: 4) {
                 Button(intent: {
                     let intent = AdjustTimeIntent()
-                    intent.minutesToAdd = -15
+                    intent.minutesToAdd = -30
                     return intent
                 }()) {
-                    Text("-15 min")
+                    Text("-30 min")
                         .font(.caption2)
                         .frame(height: 24)
                         .padding(.horizontal, 8)
@@ -129,10 +145,10 @@ struct MediumTimeZoneWidget: View {
                 
                 Button(intent: {
                     let intent = AdjustTimeIntent()
-                    intent.minutesToAdd = 15
+                    intent.minutesToAdd = 30
                     return intent
                 }()) {
-                    Text("+15 min")
+                    Text("+30 min")
                         .font(.caption2)
                         .frame(height: 24)
                         .padding(.horizontal, 8)
@@ -187,10 +203,18 @@ struct LargeTimeZoneWidget: View {
                         
                         Spacer()
                         
-                        Text(timeZone.formattedTime)
-                            .font(.title3)
-                            .fontWeight(.bold)
-                            .foregroundColor(timeZone.timeOffset == "Now" ? .green : .primary)
+                        VStack(alignment: .trailing, spacing: 1) {
+                            Text(timeZone.formattedTime)
+                                .font(.title3)
+                                .fontWeight(.bold)
+                                .foregroundColor(timeZone.timeOffset == "Now" ? .green : .primary)
+                            
+                            if !timeZone.formattedDateForDifference.isEmpty {
+                                Text(timeZone.formattedDateForDifference)
+                                    .font(.caption2)
+                                    .foregroundColor(.orange)
+                            }
+                        }
                     }
                 }
             }
@@ -200,10 +224,10 @@ struct LargeTimeZoneWidget: View {
             HStack(spacing: 4) {
                 Button(intent: {
                     let intent = AdjustTimeIntent()
-                    intent.minutesToAdd = -15
+                    intent.minutesToAdd = -30
                     return intent
                 }()) {
-                    Text("-15 min")
+                    Text("-30 min")
                         .font(.caption2)
                         .frame(height: 24)
                         .padding(.horizontal, 8)
