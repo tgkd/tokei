@@ -6,14 +6,76 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		999EBD5C2E70301200E84297 /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 999EBD5B2E70301200E84297 /* WidgetKit.framework */; };
+		999EBD5E2E70301200E84297 /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 999EBD5D2E70301200E84297 /* SwiftUI.framework */; };
+		999EBD6F2E70301300E84297 /* tokeiWidgetExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 999EBD592E70301200E84297 /* tokeiWidgetExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		999EBD6D2E70301300E84297 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 9934DB0C2E702BDF00DBFB01 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 999EBD582E70301200E84297;
+			remoteInfo = tokeiWidgetExtension;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		999EBD702E70301300E84297 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				999EBD6F2E70301300E84297 /* tokeiWidgetExtension.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
 /* Begin PBXFileReference section */
+		9921C62A2E70312300BB81E2 /* tokeiWidgetExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = tokeiWidgetExtension.entitlements; sourceTree = "<group>"; };
 		9934DB142E702BDF00DBFB01 /* tokei.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = tokei.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		999EBD592E70301200E84297 /* tokeiWidgetExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = tokeiWidgetExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		999EBD5B2E70301200E84297 /* WidgetKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WidgetKit.framework; path = System/Library/Frameworks/WidgetKit.framework; sourceTree = SDKROOT; };
+		999EBD5D2E70301200E84297 /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
 /* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		9921C62D2E70321700BB81E2 /* Exceptions for "tokei" folder in "tokei" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 9934DB132E702BDF00DBFB01 /* tokei */;
+		};
+		999EBD732E70301300E84297 /* Exceptions for "tokeiWidget" folder in "tokeiWidgetExtension" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 999EBD582E70301200E84297 /* tokeiWidgetExtension */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		9934DB162E702BDF00DBFB01 /* tokei */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				9921C62D2E70321700BB81E2 /* Exceptions for "tokei" folder in "tokei" target */,
+			);
 			path = tokei;
+			sourceTree = "<group>";
+		};
+		999EBD5F2E70301200E84297 /* tokeiWidget */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				999EBD732E70301300E84297 /* Exceptions for "tokeiWidget" folder in "tokeiWidgetExtension" target */,
+			);
+			path = tokeiWidget;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -26,13 +88,25 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		999EBD562E70301200E84297 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				999EBD5E2E70301200E84297 /* SwiftUI.framework in Frameworks */,
+				999EBD5C2E70301200E84297 /* WidgetKit.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
 		9934DB0B2E702BDF00DBFB01 = {
 			isa = PBXGroup;
 			children = (
+				9921C62A2E70312300BB81E2 /* tokeiWidgetExtension.entitlements */,
 				9934DB162E702BDF00DBFB01 /* tokei */,
+				999EBD5F2E70301200E84297 /* tokeiWidget */,
+				999EBD5A2E70301200E84297 /* Frameworks */,
 				9934DB152E702BDF00DBFB01 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -41,8 +115,18 @@
 			isa = PBXGroup;
 			children = (
 				9934DB142E702BDF00DBFB01 /* tokei.app */,
+				999EBD592E70301200E84297 /* tokeiWidgetExtension.appex */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		999EBD5A2E70301200E84297 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				999EBD5B2E70301200E84297 /* WidgetKit.framework */,
+				999EBD5D2E70301200E84297 /* SwiftUI.framework */,
+			);
+			name = Frameworks;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -55,10 +139,12 @@
 				9934DB102E702BDF00DBFB01 /* Sources */,
 				9934DB112E702BDF00DBFB01 /* Frameworks */,
 				9934DB122E702BDF00DBFB01 /* Resources */,
+				999EBD702E70301300E84297 /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				999EBD6E2E70301300E84297 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				9934DB162E702BDF00DBFB01 /* tokei */,
@@ -69,6 +155,28 @@
 			productName = tokei;
 			productReference = 9934DB142E702BDF00DBFB01 /* tokei.app */;
 			productType = "com.apple.product-type.application";
+		};
+		999EBD582E70301200E84297 /* tokeiWidgetExtension */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 999EBD742E70301300E84297 /* Build configuration list for PBXNativeTarget "tokeiWidgetExtension" */;
+			buildPhases = (
+				999EBD552E70301200E84297 /* Sources */,
+				999EBD562E70301200E84297 /* Frameworks */,
+				999EBD572E70301200E84297 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				999EBD5F2E70301200E84297 /* tokeiWidget */,
+			);
+			name = tokeiWidgetExtension;
+			packageProductDependencies = (
+			);
+			productName = tokeiWidgetExtension;
+			productReference = 999EBD592E70301200E84297 /* tokeiWidgetExtension.appex */;
+			productType = "com.apple.product-type.app-extension";
 		};
 /* End PBXNativeTarget section */
 
@@ -81,6 +189,9 @@
 				LastUpgradeCheck = 1640;
 				TargetAttributes = {
 					9934DB132E702BDF00DBFB01 = {
+						CreatedOnToolsVersion = 16.4;
+					};
+					999EBD582E70301200E84297 = {
 						CreatedOnToolsVersion = 16.4;
 					};
 				};
@@ -100,12 +211,20 @@
 			projectRoot = "";
 			targets = (
 				9934DB132E702BDF00DBFB01 /* tokei */,
+				999EBD582E70301200E84297 /* tokeiWidgetExtension */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
 		9934DB122E702BDF00DBFB01 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		999EBD572E70301200E84297 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -122,7 +241,22 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		999EBD552E70301200E84297 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		999EBD6E2E70301300E84297 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 999EBD582E70301200E84297 /* tokeiWidgetExtension */;
+			targetProxy = 999EBD6D2E70301300E84297 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		9934DB1D2E702BE000DBFB01 /* Debug */ = {
@@ -249,22 +383,27 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = tokei/tokei.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = ULU867Y7LC;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = tokei/Info.plist;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.ext.tokei;
+				MARKETING_VERSION = 0.0.1;
+				PRODUCT_BUNDLE_IDENTIFIER = com.app.tokei;
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -276,22 +415,83 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = tokei/tokei.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = ULU867Y7LC;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = tokei/Info.plist;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.ext.tokei;
+				MARKETING_VERSION = 0.0.1;
+				PRODUCT_BUNDLE_IDENTIFIER = com.app.tokei;
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		999EBD712E70301300E84297 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
+				CODE_SIGN_ENTITLEMENTS = tokeiWidgetExtension.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = ULU867Y7LC;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = tokeiWidget/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = tokeiWidget;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.app.tokei.tokeiWidget;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		999EBD722E70301300E84297 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
+				CODE_SIGN_ENTITLEMENTS = tokeiWidgetExtension.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = ULU867Y7LC;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = tokeiWidget/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = tokeiWidget;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.app.tokei.tokeiWidget;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -315,6 +515,15 @@
 			buildConfigurations = (
 				9934DB202E702BE000DBFB01 /* Debug */,
 				9934DB212E702BE000DBFB01 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		999EBD742E70301300E84297 /* Build configuration list for PBXNativeTarget "tokeiWidgetExtension" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				999EBD712E70301300E84297 /* Debug */,
+				999EBD722E70301300E84297 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
