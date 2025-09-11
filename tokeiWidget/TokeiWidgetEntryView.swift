@@ -53,11 +53,9 @@ struct SmallTimeZoneWidget: View {
                                     .font(.caption)
                                     .fontWeight(.semibold)
                                 
-                                if !timeZone.formattedDateForDifference.isEmpty {
-                                    Text(timeZone.formattedDateForDifference)
-                                        .font(.caption2)
-                                        .foregroundColor(.orange)
-                                }
+                                Text(timeZone.formattedDate)
+                                    .font(.caption2)
+                                    .foregroundColor(.secondary)
                             }
                             
                             Spacer()
@@ -90,11 +88,6 @@ struct MediumTimeZoneWidget: View {
                                 .font(.subheadline)
                                 .fontWeight(.medium)
                                 .lineLimit(1)
-                            
-                            Text(timeZone.relativeDescription)
-                                .font(.caption2)
-                                .foregroundColor(.secondary)
-                                .lineLimit(1)
                         }
                         
                         Spacer()
@@ -105,11 +98,9 @@ struct MediumTimeZoneWidget: View {
                                 .fontWeight(.bold)
                                 .foregroundColor(timeZone.timeOffset == "Now" ? .green : .primary)
                             
-                            if !timeZone.formattedDateForDifference.isEmpty {
-                                Text(timeZone.formattedDateForDifference)
-                                    .font(.caption2)
-                                    .foregroundColor(.orange)
-                            }
+                            Text(timeZone.formattedDate)
+                                .font(.caption2)
+                                .foregroundColor(.secondary)
                         }
                     }
                 }
@@ -194,11 +185,6 @@ struct LargeTimeZoneWidget: View {
                                 .font(.subheadline)
                                 .fontWeight(.medium)
                                 .lineLimit(1)
-                            
-                            Text(timeZone.relativeDescription)
-                                .font(.caption2)
-                                .foregroundColor(.secondary)
-                                .lineLimit(1)
                         }
                         
                         Spacer()
@@ -209,11 +195,9 @@ struct LargeTimeZoneWidget: View {
                                 .fontWeight(.bold)
                                 .foregroundColor(timeZone.timeOffset == "Now" ? .green : .primary)
                             
-                            if !timeZone.formattedDateForDifference.isEmpty {
-                                Text(timeZone.formattedDateForDifference)
-                                    .font(.caption2)
-                                    .foregroundColor(.orange)
-                            }
+                            Text(timeZone.formattedDate)
+                                .font(.caption2)
+                                .foregroundColor(.secondary)
                         }
                     }
                 }

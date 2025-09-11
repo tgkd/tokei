@@ -70,38 +70,79 @@ struct TimeZoneInfo: Identifiable, Codable {
         let diffSeconds = targetOffset - currentOffset
         let diffHours = abs(diffSeconds / 3600)
         
+        let dayDiff = dayDifference
+        
         if diffSeconds == 0 {
-            return "Same time"
+            switch dayDiff {
+            case 0:
+                return "Same time"
+            case 1:
+                return "Tomorrow, same time"
+            case -1:
+                return "Yesterday, same time"
+            default:
+                return dayDiff > 0 ? "\(dayDiff) days ahead, same time" : "\(abs(dayDiff)) days behind, same time"
+            }
         } else if diffSeconds > 0 {
-            return dayDifference == 0 ? "Today, \(diffHours) hours ahead" : "Tomorrow, \(diffHours) hours ahead"
+            switch dayDiff {
+            case 0:
+                return "Today, \(diffHours)h ahead"
+            case 1:
+                return "Tomorrow, \(diffHours)h ahead"
+            case -1:
+                return "Yesterday, \(diffHours)h ahead"
+            default:
+                return dayDiff > 0 ? "\(dayDiff) days ahead, \(diffHours)h" : "\(abs(dayDiff)) days behind, \(diffHours)h ahead"
+            }
         } else {
-            return dayDifference == 0 ? "Today, \(diffHours) hours behind" : "Yesterday, \(diffHours) hours behind"
+            switch dayDiff {
+            case 0:
+                return "Today, \(diffHours)h behind"
+            case 1:
+                return "Tomorrow, \(diffHours)h behind"
+            case -1:
+                return "Yesterday, \(diffHours)h behind"
+            default:
+                return dayDiff > 0 ? "\(dayDiff) days ahead, \(diffHours)h behind" : "\(abs(dayDiff)) days behind, \(diffHours)h"
+            }
         }
     }
     
     var dayDifference: Int {
-        let calendar = Calendar.current
-        
-        // Get current calendar in local timezone
+        // Create calendars for both timezones
         var localCalendar = Calendar.current
         localCalendar.timeZone = TimeZone.current
         
-        // Get current calendar in target timezone
         var targetCalendar = Calendar.current
         targetCalendar.timeZone = timeZone
         
-        // Get date components for the current time in both timezones
-        let localDateComponents = localCalendar.dateComponents([.year, .month, .day], from: currentTime)
-        let targetDateComponents = targetCalendar.dateComponents([.year, .month, .day], from: currentTime)
+        // Use the adjusted time that includes the offset
+        let adjustedTime = currentTime
         
-        // Create dates from components to get the actual calendar dates
-        guard let localDate = localCalendar.date(from: localDateComponents),
-              let targetDate = targetCalendar.date(from: targetDateComponents) else {
-            return 0
-        }
+        // Get the current day in local timezone (using current time, not adjusted)
+        let localDay = localCalendar.dateComponents([.year, .month, .day], from: Date())
+        let localDayDate = localCalendar.date(from: localDay)!
         
-        // Compare the calendar dates
-        return calendar.dateComponents([.day], from: localDate, to: targetDate).day ?? 0
+        // Get the corresponding day in target timezone using adjusted time
+        let targetDay = targetCalendar.dateComponents([.year, .month, .day], from: adjustedTime)
+        let targetDayDate = targetCalendar.date(from: targetDay)!
+        
+        // Convert both dates to the same timezone (UTC) to properly compare days
+        let utcCalendar = Calendar(identifier: .gregorian)
+        let localDayUTC = utcCalendar.startOfDay(for: localDayDate)
+        let targetDayUTC = utcCalendar.startOfDay(for: targetDayDate)
+        
+        // Calculate difference in days
+        let daysDiff = utcCalendar.dateComponents([.day], from: localDayUTC, to: targetDayUTC).day ?? 0
+        
+        return daysDiff
+    }
+    
+    var formattedDate: String {
+        let formatter = DateFormatter()
+        formatter.timeZone = timeZone
+        formatter.dateFormat = "dd.MM"
+        return formatter.string(from: currentTime)
     }
     
     var formattedDateForDifference: String {
