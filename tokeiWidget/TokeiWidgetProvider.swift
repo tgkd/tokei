@@ -6,7 +6,8 @@ struct Provider: AppIntentTimelineProvider {
         TokeiEntry(
             date: Date(),
             timeZones: Array(TimeZoneInfo.defaultTimeZones.prefix(3)),
-            selectedTimeZones: []
+            selectedTimeZones: [],
+            currentTimeOffsetMinutes: 0
         )
     }
 
@@ -14,7 +15,8 @@ struct Provider: AppIntentTimelineProvider {
         TokeiEntry(
             date: Date(),
             timeZones: Array(TimeZoneInfo.defaultTimeZones.prefix(3)),
-            selectedTimeZones: []
+            selectedTimeZones: [],
+            currentTimeOffsetMinutes: UserDefaults.shared.integer(forKey: "time_offset_minutes")
         )
     }
     
@@ -24,13 +26,15 @@ struct Provider: AppIntentTimelineProvider {
         let currentDate = Date()
         let savedTimeZones = loadSavedTimeZones()
         let displayTimeZones = savedTimeZones.isEmpty ? Array(TimeZoneInfo.defaultTimeZones.prefix(3)) : savedTimeZones
+        let currentTimeOffset = UserDefaults.shared.integer(forKey: "time_offset_minutes")
         
         for i in 0..<60 {
             let entryDate = Calendar.current.date(byAdding: .minute, value: i, to: currentDate)!
             let entry = TokeiEntry(
                 date: entryDate,
                 timeZones: displayTimeZones,
-                selectedTimeZones: savedTimeZones
+                selectedTimeZones: savedTimeZones,
+                currentTimeOffsetMinutes: currentTimeOffset
             )
             entries.append(entry)
         }
@@ -51,6 +55,22 @@ struct TokeiEntry: TimelineEntry {
     let date: Date
     let timeZones: [TimeZoneInfo]
     let selectedTimeZones: [TimeZoneInfo]
+    let currentTimeOffsetMinutes: Int
+    
+    var formattedTimeOffset: String {
+        if currentTimeOffsetMinutes == 0 {
+            return "Now"
+        }
+        let hours = abs(currentTimeOffsetMinutes) / 60
+        let minutes = abs(currentTimeOffsetMinutes) % 60
+        let sign = currentTimeOffsetMinutes >= 0 ? "+" : "-"
+        
+        if minutes == 0 {
+            return String(format: "%@%dh", sign, hours)
+        } else {
+            return String(format: "%@%d:%02d", sign, hours, minutes)
+        }
+    }
 }
 
 extension UserDefaults {

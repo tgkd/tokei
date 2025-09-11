@@ -7,7 +7,7 @@ struct TokeiWidget: Widget {
     var body: some WidgetConfiguration {
         AppIntentConfiguration(kind: kind, intent: ConfigurationAppIntent.self, provider: Provider()) { entry in
             TokeiWidgetEntryView(entry: entry)
-                .containerBackground(.fill.tertiary, for: .widget)
+                .containerBackground(Color(.systemBackground), for: .widget)
         }
         .configurationDisplayName("World Clock")
         .description("Keep track of time zones around the world.")
@@ -21,12 +21,14 @@ struct TokeiWidget: Widget {
     TokeiEntry(
         date: .now, 
         timeZones: Array(TimeZoneInfo.defaultTimeZones.prefix(1)),
-        selectedTimeZones: []
+        selectedTimeZones: [],
+        currentTimeOffsetMinutes: 0
     )
     TokeiEntry(
         date: .now, 
         timeZones: Array(TimeZoneInfo.defaultTimeZones.prefix(1)),
-        selectedTimeZones: []
+        selectedTimeZones: [],
+        currentTimeOffsetMinutes: 0
     )
 }
 
@@ -36,7 +38,8 @@ struct TokeiWidget: Widget {
     TokeiEntry(
         date: .now,
         timeZones: Array(TimeZoneInfo.defaultTimeZones.prefix(2)),
-        selectedTimeZones: []
+        selectedTimeZones: [],
+        currentTimeOffsetMinutes: 0
     )
 }
 
@@ -46,6 +49,7 @@ struct TokeiWidget: Widget {
     TokeiEntry(
         date: .now,
         timeZones: Array(TimeZoneInfo.defaultTimeZones.prefix(4)),
-        selectedTimeZones: []
+        selectedTimeZones: [],
+        currentTimeOffsetMinutes: 0
     )
 }

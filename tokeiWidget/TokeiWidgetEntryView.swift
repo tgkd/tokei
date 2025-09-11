@@ -79,8 +79,8 @@ struct MediumTimeZoneWidget: View {
     let entry: TokeiEntry
     
     var body: some View {
-        VStack(spacing: 8) {
-            VStack(spacing: 6) {
+        VStack(spacing: 4) {
+            VStack(spacing: 4) {
                 ForEach(Array(entry.timeZones.prefix(2))) { timeZone in
                     HStack(spacing: 8) {
                         VStack(alignment: .leading, spacing: 1) {
@@ -92,7 +92,7 @@ struct MediumTimeZoneWidget: View {
                         
                         Spacer()
                         
-                        VStack(alignment: .trailing, spacing: 1) {
+                        VStack(alignment: .trailing, spacing: 0) {
                             Text(timeZone.formattedTime)
                                 .font(.title3)
                                 .fontWeight(.bold)
@@ -107,30 +107,30 @@ struct MediumTimeZoneWidget: View {
             }
             
             Spacer()
-                        HStack(spacing: 4) {
+                        HStack(spacing: 8) {
                 Button(intent: {
                     let intent = AdjustTimeIntent()
                     intent.minutesToAdd = -30
                     return intent
                 }()) {
-                    Text("-30 min")
-                        .font(.caption2)
-                        .frame(height: 24)
-                        .padding(.horizontal, 8)
-                        .background(Color.red.opacity(0.1))
-                        .foregroundColor(.red)
-                        .cornerRadius(4)
+                    Text("-30")
+                        .font(.caption)
+                        .fontWeight(.medium)
+                        .foregroundColor(.primary)
+                        .frame(minWidth: 36, minHeight: 28)
+                        .background(Color(.systemGray6))
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
                 }
                 .buttonStyle(PlainButtonStyle())
                 
                 Button(intent: ResetTimeIntent()) {
-                    Image(systemName: "clock")
-                        .font(.caption2)
-                        .frame(height: 24)
-                        .padding(.horizontal, 8)
-                        .background(Color.blue.opacity(0.2))
-                        .foregroundColor(.blue)
-                        .cornerRadius(4)
+                    Text(entry.formattedTimeOffset)
+                        .font(.caption)
+                        .fontWeight(.medium)
+                        .foregroundColor(.primary)
+                        .frame(minWidth: 52, minHeight: 28)
+                        .background(Color(.systemGray5))
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
                 }
                 .buttonStyle(PlainButtonStyle())
                 
@@ -139,13 +139,13 @@ struct MediumTimeZoneWidget: View {
                     intent.minutesToAdd = 30
                     return intent
                 }()) {
-                    Text("+30 min")
-                        .font(.caption2)
-                        .frame(height: 24)
-                        .padding(.horizontal, 8)
-                        .background(Color.green.opacity(0.2))
-                        .foregroundColor(.green)
-                        .cornerRadius(4)
+                    Text("+30")
+                        .font(.caption)
+                        .fontWeight(.medium)
+                        .foregroundColor(.primary)
+                        .frame(minWidth: 36, minHeight: 28)
+                        .background(Color(.systemGray6))
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
                 }
                 .buttonStyle(PlainButtonStyle())
                 
@@ -160,7 +160,8 @@ struct MediumTimeZoneWidget: View {
             }
             
         }
-        .padding(12)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 12)
     }
 }
 
@@ -189,7 +190,7 @@ struct LargeTimeZoneWidget: View {
                         
                         Spacer()
                         
-                        VStack(alignment: .trailing, spacing: 1) {
+                        VStack(alignment: .trailing, spacing: 0) {
                             Text(timeZone.formattedTime)
                                 .font(.title3)
                                 .fontWeight(.bold)
@@ -205,45 +206,45 @@ struct LargeTimeZoneWidget: View {
             
             Spacer()
             
-            HStack(spacing: 4) {
+            HStack(spacing: 8) {
                 Button(intent: {
                     let intent = AdjustTimeIntent()
                     intent.minutesToAdd = -30
                     return intent
                 }()) {
-                    Text("-30 min")
-                        .font(.caption2)
-                        .frame(height: 24)
-                        .padding(.horizontal, 8)
-                        .background(Color.red.opacity(0.1))
-                        .foregroundColor(.red)
-                        .cornerRadius(4)
+                    Text("-30")
+                        .font(.caption)
+                        .fontWeight(.medium)
+                        .foregroundColor(.primary)
+                        .frame(minWidth: 36, minHeight: 28)
+                        .background(Color(.systemGray6))
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
                 }
                 .buttonStyle(PlainButtonStyle())
                 
                 Button(intent: ResetTimeIntent()) {
-                    Image(systemName: "clock")
-                        .font(.caption2)
-                        .frame(height: 24)
-                        .padding(.horizontal, 8)
-                        .background(Color.blue.opacity(0.1))
-                        .foregroundColor(.blue)
-                        .cornerRadius(4)
+                    Text(entry.formattedTimeOffset)
+                        .font(.caption)
+                        .fontWeight(.medium)
+                        .foregroundColor(.primary)
+                        .frame(minWidth: 52, minHeight: 28)
+                        .background(Color(.systemGray5))
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
                 }
                 .buttonStyle(PlainButtonStyle())
                 
                 Button(intent: {
                     let intent = AdjustTimeIntent()
-                    intent.minutesToAdd = 15
+                    intent.minutesToAdd = 30
                     return intent
                 }()) {
-                    Text("+15 min")
-                        .font(.caption2)
-                        .frame(height: 24)
-                        .padding(.horizontal, 8)
-                        .background(Color.green.opacity(0.1))
-                        .foregroundColor(.green)
-                        .cornerRadius(4)
+                    Text("+30")
+                        .font(.caption)
+                        .fontWeight(.medium)
+                        .foregroundColor(.primary)
+                        .frame(minWidth: 36, minHeight: 28)
+                        .background(Color(.systemGray6))
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
                 }
                 .buttonStyle(PlainButtonStyle())
                 
