@@ -13,7 +13,6 @@ struct ContentView: View {
     @State private var showingAddTimeZone = false
     @State private var newCityName = ""
     @State private var newTimeZoneIdentifier = ""
-    @State private var newWeatherEmoji = "🌍"
     @State private var timeOffsetMinutes: Double = 0
     @State private var isEditingSlider = false
     
@@ -49,10 +48,15 @@ struct ContentView: View {
                                 }
                                 .listRowInsets(EdgeInsets())
                                 .listRowSeparator(.hidden)
+                                .draggable(timeZone)
                             }
                             .onDelete(perform: deleteTimeZones)
+                            .onMove(perform: moveTimeZones)
                         }
                         .listStyle(.plain)
+                        .dropDestination(for: TimeZoneInfo.self) { items, location in
+                            return handleDrop(items: items, location: location)
+                        }
                     }
                 }
                 
@@ -129,9 +133,8 @@ struct ContentView: View {
             AddTimeZoneView(
                 cityName: $newCityName,
                 timeZoneIdentifier: $newTimeZoneIdentifier,
-                weatherEmoji: $newWeatherEmoji,
-                onAdd: { city, identifier, emoji in
-                    addTimeZone(city: city, identifier: identifier, emoji: emoji)
+                onAdd: { city, identifier in
+                    addTimeZone(city: city, identifier: identifier)
                     showingAddTimeZone = false
                 },
                 onCancel: {
@@ -186,11 +189,10 @@ struct ContentView: View {
         updateWidget()
     }
     
-    private func addTimeZone(city: String, identifier: String, emoji: String) {
+    private func addTimeZone(city: String, identifier: String) {
         let newTimeZone = TimeZoneInfo(
             cityName: city,
-            timeZoneIdentifier: identifier,
-            weatherEmoji: emoji
+            timeZoneIdentifier: identifier
         )
         timeZones.append(newTimeZone)
         saveTimeZones()
@@ -204,6 +206,15 @@ struct ContentView: View {
     private func deleteTimeZones(at offsets: IndexSet) {
         timeZones.remove(atOffsets: offsets)
         saveTimeZones()
+    }
+    
+    private func moveTimeZones(from source: IndexSet, to destination: Int) {
+        timeZones.move(fromOffsets: source, toOffset: destination)
+        saveTimeZones()
+    }
+    
+    private func handleDrop(items: [TimeZoneInfo], location: CGPoint) -> Bool {
+        return true
     }
     
     private func updateWidget() {
@@ -252,8 +263,7 @@ struct TimeZoneRow: View {
 struct AddTimeZoneView: View {
     @Binding var cityName: String
     @Binding var timeZoneIdentifier: String
-    @Binding var weatherEmoji: String
-    let onAdd: (String, String, String) -> Void
+    let onAdd: (String, String) -> Void
     let onCancel: () -> Void
     
     @State private var searchText = ""
@@ -272,7 +282,7 @@ struct AddTimeZoneView: View {
         NavigationView {
             List(filteredTimeZones, id: \.timeZoneIdentifier) { timeZone in
                 Button(action: {
-                    onAdd(timeZone.cityName, timeZone.timeZoneIdentifier, "")
+                    onAdd(timeZone.cityName, timeZone.timeZoneIdentifier)
                 }) {
                     HStack(spacing: 12) {
                         VStack(alignment: .leading, spacing: 4) {

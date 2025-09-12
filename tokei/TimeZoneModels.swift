@@ -1,20 +1,35 @@
 import Foundation
+import CoreTransferable
+import UniformTypeIdentifiers
 
-struct TimeZoneInfo: Identifiable, Codable {
+struct TimeZoneInfo: Identifiable, Codable, Transferable {
     let id: UUID
     let cityName: String
     let timeZoneIdentifier: String
-    let weatherEmoji: String
     
-    init(cityName: String, timeZoneIdentifier: String, weatherEmoji: String) {
+    init(cityName: String, timeZoneIdentifier: String) {
         self.id = UUID()
         self.cityName = cityName
         self.timeZoneIdentifier = timeZoneIdentifier
-        self.weatherEmoji = weatherEmoji
     }
     
     var timeZone: TimeZone {
         TimeZone(identifier: timeZoneIdentifier) ?? TimeZone.current
+    }
+    
+    var shortCityName: String {
+        let formatter = DateFormatter()
+        formatter.timeZone = timeZone
+        formatter.dateFormat = "zzz"
+        let abbreviation = formatter.string(from: Date())
+        
+        // If we get a timezone abbreviation, use it, otherwise fallback to first 3 chars of city name
+        if abbreviation.count <= 4 && !abbreviation.contains("GMT") {
+            return abbreviation
+        } else {
+            // Fallback: create abbreviation from city name
+            return String(cityName.prefix(3).uppercased())
+        }
     }
     
     var currentTime: Date {
@@ -153,6 +168,10 @@ struct TimeZoneInfo: Identifiable, Codable {
         formatter.dateFormat = "dd.MM"
         return "(\(formatter.string(from: currentTime)))"
     }
+    
+    static var transferRepresentation: some TransferRepresentation {
+        CodableRepresentation(contentType: .data)
+    }
 }
 
 struct SearchableTimeZone {
@@ -198,16 +217,16 @@ struct SearchableTimeZone {
     }
     
     func toTimeZoneInfo() -> TimeZoneInfo {
-        TimeZoneInfo(cityName: cityName, timeZoneIdentifier: timeZoneIdentifier, weatherEmoji: "")
+        TimeZoneInfo(cityName: cityName, timeZoneIdentifier: timeZoneIdentifier)
     }
 }
 
 extension TimeZoneInfo {
     static let defaultTimeZones = [
-        TimeZoneInfo(cityName: "Yekaterinburg", timeZoneIdentifier: "Asia/Yekaterinburg", weatherEmoji: "☀️"),
-        TimeZoneInfo(cityName: "London", timeZoneIdentifier: "Europe/London", weatherEmoji: "🌅"),
-        TimeZoneInfo(cityName: "Buenos Aires", timeZoneIdentifier: "America/Argentina/Buenos_Aires", weatherEmoji: "🌅"),
-        TimeZoneInfo(cityName: "Tokyo", timeZoneIdentifier: "Asia/Tokyo", weatherEmoji: "🌙"),
+        TimeZoneInfo(cityName: "Yekaterinburg", timeZoneIdentifier: "Asia/Yekaterinburg"),
+        TimeZoneInfo(cityName: "London", timeZoneIdentifier: "Europe/London"),
+        TimeZoneInfo(cityName: "Buenos Aires", timeZoneIdentifier: "America/Argentina/Buenos_Aires"),
+        TimeZoneInfo(cityName: "Tokyo", timeZoneIdentifier: "Asia/Tokyo"),
     ]
     
     static var allAvailableTimeZones: [SearchableTimeZone] {

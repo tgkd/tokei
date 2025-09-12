@@ -91,16 +91,12 @@ struct AddTimeZoneIntent: AppIntent {
     @Parameter(title: "Time Zone Identifier") 
     var timeZoneIdentifier: String
     
-    @Parameter(title: "Weather Emoji")
-    var weatherEmoji: String
-    
     func perform() async throws -> some IntentResult {
         var currentTimeZones = loadSavedTimeZones()
         
         let newTimeZone = TimeZoneInfo(
             cityName: cityName,
-            timeZoneIdentifier: timeZoneIdentifier,
-            weatherEmoji: weatherEmoji.isEmpty ? "🌍" : weatherEmoji
+            timeZoneIdentifier: timeZoneIdentifier
         )
         
         currentTimeZones.append(newTimeZone)
