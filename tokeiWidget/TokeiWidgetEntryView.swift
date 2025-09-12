@@ -25,17 +25,7 @@ struct SmallTimeZoneWidget: View {
     let entry: TokeiEntry
     
     var body: some View {
-        VStack(spacing: 2) {
-            HStack {
-                Spacer()
-                Button(intent: RefreshTimeZonesIntent()) {
-                    Image(systemName: "arrow.clockwise")
-                        .font(.caption2)
-                        .foregroundColor(.blue)
-                }
-                .buttonStyle(PlainButtonStyle())
-            }
-            
+        VStack(spacing: 6) {
             VStack(spacing: 4) {
                 ForEach(Array(entry.timeZones.prefix(2))) { timeZone in
                     VStack(spacing: 1) {
@@ -50,7 +40,7 @@ struct SmallTimeZoneWidget: View {
                         HStack {
                             VStack(alignment: .leading, spacing: 1) {
                                 Text(timeZone.formattedTime)
-                                    .font(.caption)
+                                    .font(.system(.caption, design: .monospaced))
                                     .fontWeight(.semibold)
                                 
                                 Text(timeZone.formattedDate)
@@ -94,7 +84,7 @@ struct MediumTimeZoneWidget: View {
                         
                         VStack(alignment: .trailing, spacing: 0) {
                             Text(timeZone.formattedTime)
-                                .font(.title3)
+                                .font(.system(.title3, design: .monospaced))
                                 .fontWeight(.bold)
                                 .foregroundColor(timeZone.timeOffset == "Now" ? .green : .primary)
                             
@@ -195,9 +185,9 @@ struct MediumCompactTimeZoneWidget: View {
     
     var body: some View {
         VStack(spacing: 8) {
-            HStack(spacing: 2) {
+            HStack(spacing: 8) {
                 ForEach(Array(entry.timeZones.prefix(4))) { timeZone in
-                    VStack(spacing: 1) {
+                    VStack(alignment: .center, spacing: 2) {
                         Text(timeZone.shortCityName)
                             .font(.caption2)
                             .fontWeight(.medium)
@@ -205,35 +195,47 @@ struct MediumCompactTimeZoneWidget: View {
                             .foregroundColor(.secondary)
                         
                         Text(timeZone.formattedTime)
-                            .font(.system(.subheadline, design: .rounded))
+                            .font(.system(.caption, design: .monospaced))
                             .fontWeight(.semibold)
-                            .foregroundColor(timeZone.timeOffset == "Now" ? .green : .primary)
                             .lineLimit(1)
-                            .minimumScaleFactor(0.8)
+                            .scaleEffect({
+                                let dayShift = dayShiftText(for: timeZone)
+                                if dayShift == "+1day" {
+                                    return 1.1
+                                } else if dayShift == "-1day" {
+                                    return 0.9
+                                } else {
+                                    return 1.0
+                                }
+                            }())
+                            .foregroundColor({
+                                let dayShift = dayShiftText(for: timeZone)
+                                if dayShift == "+1day" {
+                                    return .orange
+                                } else if dayShift == "-1day" {
+                                    return .blue
+                                } else if timeZone.timeOffset == "Now" {
+                                    return .green
+                                } else {
+                                    return .primary
+                                }
+                            }())
                         
                         VStack(spacing: 0) {
                             Text(timeZone.timeOffset)
                                 .font(.system(size: 10))
                                 .foregroundColor(.secondary)
                             
-                            Text(dayShiftText(for: timeZone))
+                            Text("")
                                 .font(.system(size: 8))
-                                .foregroundColor(.orange)
-                                .fontWeight(.medium)
+                                .frame(height: 10)
                         }
                         .lineLimit(1)
                     }
                     .frame(maxWidth: .infinity)
-                    
-                    if timeZone.id != entry.timeZones.prefix(4).last?.id {
-                        Divider()
-                            .frame(height: 28)
-                    }
                 }
             }
-            
             Spacer()
-            
             HStack(spacing: 6) {
                 Button(intent: {
                     let intent = AdjustTimeIntent()
@@ -255,7 +257,7 @@ struct MediumCompactTimeZoneWidget: View {
                         .font(.system(size: 11))
                         .fontWeight(.medium)
                         .foregroundColor(.primary)
-                        .frame(minWidth: 40, minHeight: 24)
+                        .frame(minWidth: 52, minHeight: 24)
                         .background(Color(.systemGray5))
                         .clipShape(RoundedRectangle(cornerRadius: 6))
                 }
@@ -286,8 +288,8 @@ struct MediumCompactTimeZoneWidget: View {
                 .buttonStyle(PlainButtonStyle())
             }
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 8)
+        .padding(.horizontal, 6)
+        .padding(.vertical, 6)
     }
 }
 
@@ -318,7 +320,7 @@ struct LargeTimeZoneWidget: View {
                         
                         VStack(alignment: .trailing, spacing: 0) {
                             Text(timeZone.formattedTime)
-                                .font(.title3)
+                                .font(.system(.title3, design: .monospaced))
                                 .fontWeight(.bold)
                                 .foregroundColor(timeZone.timeOffset == "Now" ? .green : .primary)
                             
@@ -382,6 +384,164 @@ struct LargeTimeZoneWidget: View {
                         .foregroundColor(.blue)
                 }
                 .buttonStyle(PlainButtonStyle())
+            }
+        }
+        .padding(12)
+    }
+}
+
+struct TokeiCompactWidgetEntryView: View {
+    var entry: Provider.Entry
+    
+    @Environment(\.widgetFamily) var family
+
+    var body: some View {
+        switch family {
+        case .systemSmall:
+            CompactSmallWidget(entry: entry)
+        case .systemMedium:
+            CompactMediumWidget(entry: entry)
+        default:
+            CompactSmallWidget(entry: entry)
+        }
+    }
+}
+
+struct TokeiMinimalWidgetEntryView: View {
+    var entry: Provider.Entry
+    
+    @Environment(\.widgetFamily) var family
+
+    var body: some View {
+        switch family {
+        case .systemSmall:
+            MinimalSmallWidget(entry: entry)
+        case .systemMedium:
+            MinimalMediumWidget(entry: entry)
+        default:
+            MinimalSmallWidget(entry: entry)
+        }
+    }
+}
+
+struct CompactSmallWidget: View {
+    let entry: TokeiEntry
+    
+    var body: some View {
+        VStack(spacing: 4) {
+            ForEach(Array(entry.timeZones.prefix(3))) { timeZone in
+                HStack {
+                    Text(timeZone.shortCityName)
+                        .font(.caption2)
+                        .fontWeight(.medium)
+                        .frame(width: 30, alignment: .leading)
+                    
+                    Spacer()
+                    
+                    Text(timeZone.formattedTime)
+                        .font(.system(.caption, design: .monospaced))
+                        .fontWeight(.semibold)
+                        .foregroundColor(timeZone.timeOffset == "Now" ? .green : .primary)
+                }
+            }
+            
+            Spacer()
+            
+            HStack {
+                Spacer()
+                Text(entry.formattedTimeOffset)
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+            }
+        }
+        .padding(8)
+    }
+}
+
+struct CompactMediumWidget: View {
+    let entry: TokeiEntry
+    
+    var body: some View {
+        HStack(spacing: 4) {
+            ForEach(Array(entry.timeZones.prefix(4))) { timeZone in
+                VStack(spacing: 2) {
+                    Text(timeZone.shortCityName)
+                        .font(.caption2)
+                        .fontWeight(.medium)
+                        .foregroundColor(.secondary)
+                    
+                    Text(timeZone.formattedTime)
+                        .font(.system(.caption, design: .monospaced))
+                        .fontWeight(.semibold)
+                        .foregroundColor(timeZone.timeOffset == "Now" ? .green : .primary)
+                    
+                    Text(timeZone.timeOffset)
+                        .font(.system(size: 9))
+                        .foregroundColor(.secondary)
+                }
+                .frame(maxWidth: .infinity)
+            }
+        }
+        .padding(8)
+    }
+}
+
+struct MinimalSmallWidget: View {
+    let entry: TokeiEntry
+    
+    var body: some View {
+        if let timeZone = entry.timeZones.first {
+            VStack(spacing: 4) {
+                Text(timeZone.cityName)
+                    .font(.caption)
+                    .fontWeight(.medium)
+                    .foregroundColor(.secondary)
+                
+                Text(timeZone.formattedTime)
+                    .font(.system(.title2, design: .monospaced))
+                    .fontWeight(.bold)
+                    .foregroundColor(timeZone.timeOffset == "Now" ? .green : .primary)
+                
+                Text(timeZone.formattedDate)
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+                
+                Spacer()
+                
+                if entry.currentTimeOffsetMinutes != 0 {
+                    Text(entry.formattedTimeOffset)
+                        .font(.caption2)
+                        .foregroundColor(.orange)
+                        .fontWeight(.medium)
+                }
+            }
+            .padding(12)
+        }
+    }
+}
+
+struct MinimalMediumWidget: View {
+    let entry: TokeiEntry
+    
+    var body: some View {
+        HStack(spacing: 16) {
+            ForEach(Array(entry.timeZones.prefix(2))) { timeZone in
+                VStack(spacing: 4) {
+                    Text(timeZone.cityName)
+                        .font(.subheadline)
+                        .fontWeight(.medium)
+                        .foregroundColor(.secondary)
+                    
+                    Text(timeZone.formattedTime)
+                        .font(.system(.title, design: .monospaced))
+                        .fontWeight(.bold)
+                        .foregroundColor(timeZone.timeOffset == "Now" ? .green : .primary)
+                    
+                    Text(timeZone.formattedDate)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+                .frame(maxWidth: .infinity)
             }
         }
         .padding(12)

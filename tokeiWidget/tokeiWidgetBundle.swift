@@ -5,5 +5,7 @@ import SwiftUI
 struct tokeiWidgetBundle: WidgetBundle {
     var body: some Widget {
         TokeiWidget()
+        TokeiCompactWidget()
+        TokeiMinimalWidget()
     }
 }
