@@ -165,25 +165,25 @@ struct MediumCompactTimeZoneWidget: View {
         VStack(spacing: 8) {
             HStack(spacing: 8) {
                 ForEach(Array(entry.timeZones.prefix(4))) { timeZone in
-                    VStack(alignment: .center, spacing: 2) {
+                    VStack(alignment: .center, spacing: 4) {
                         Text(timeZone.shortCityName)
                             .font(.caption2)
                             .fontWeight(.medium)
                             .lineLimit(1)
                             .foregroundColor(.secondary)
-                        
+
                         Text(timeZone.formattedTime)
                             .font(.system(.caption, design: .monospaced))
                             .fontWeight(.semibold)
                             .lineLimit(1)
                             .scaleEffect(timeZone.dynamicTimeScale)
                             .foregroundColor(timeZone.dynamicTimeColor)
-                        
+
                         VStack(spacing: 0) {
                             Text(timeZone.timeOffset)
                                 .font(.system(size: 10))
                                 .foregroundColor(.secondary)
-                            
+
                             Text("")
                                 .font(.system(size: 8))
                                 .frame(height: 10)
@@ -193,7 +193,7 @@ struct MediumCompactTimeZoneWidget: View {
                     .frame(maxWidth: .infinity)
                 }
             }
-            Spacer()
+            Spacer(minLength: 4)
             HStack(spacing: 6) {
                 Button(intent: {
                     let intent = AdjustTimeIntent()
