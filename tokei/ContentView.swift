@@ -15,98 +15,132 @@ struct ContentView: View {
   @State private var newTimeZoneIdentifier = ""
   @State private var timeOffsetMinutes: Double = 0
   @State private var isEditingSlider = false
+  @State private var showSlider = false
 
   var body: some View {
     NavigationView {
-      VStack(spacing: 0) {
-        if timeZones.isEmpty {
-          VStack {
-            Text("World Clock")
-              .font(.largeTitle)
-              .fontWeight(.bold)
-              .padding(.bottom, 20)
+      ZStack {
+        // Main content
+        VStack(spacing: 0) {
+          if timeZones.isEmpty {
+            VStack {
+              Text("World Clock")
+                .font(.largeTitle)
+                .fontWeight(.bold)
+                .padding(.bottom, 20)
 
-            Spacer()
-            Text("No time zones added yet")
-              .foregroundColor(.secondary)
-            Spacer()
-          }
-        } else {
-          VStack(alignment: .leading, spacing: 0) {
-            Text("World Clock")
-              .font(.largeTitle)
-              .fontWeight(.bold)
-              .padding(.horizontal, 20)
-            List {
-              ForEach(timeZones) { timeZone in
-                TimeZoneRow(timeZone: timeZone) {
-                  removeTimeZone(timeZone)
+              Spacer()
+              Text("No time zones added yet")
+                .foregroundColor(.secondary)
+              Spacer()
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+          } else {
+            VStack(alignment: .leading, spacing: 0) {
+              List {
+                ForEach(timeZones) { timeZone in
+                  TimeZoneRow(timeZone: timeZone) {
+                    removeTimeZone(timeZone)
+                  }
+                  .draggable(timeZone)
                 }
-                .draggable(timeZone)
+                .onDelete(perform: deleteTimeZones)
+                .onMove(perform: moveTimeZones)
+
               }
-              .onDelete(perform: deleteTimeZones)
-              .onMove(perform: moveTimeZones)
+              .dropDestination(for: TimeZoneInfo.self) { items, location in
+                return handleDrop(items: items, location: location)
+              }
             }
-            .dropDestination(for: TimeZoneInfo.self) { items, location in
-              return handleDrop(items: items, location: location)
-            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
           }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-        HStack {
-          ZStack(alignment: .leading) {
-            Slider(
-              value: $timeOffsetMinutes, in: -1440...1440, step: 15,
-              onEditingChanged: { editing in
-                isEditingSlider = editing
+        // Floating footer
+        VStack {
+          Spacer()
+          HStack {
+            // Time offset controls container
+            HStack(spacing: 0) {
+              // Toggle slider button on bottom left
+              Button(action: {
+                withAnimation(.easeInOut(duration: 0.1)) {
+                  showSlider.toggle()
+                }
+              }) {
+                if showSlider {
+                  Text(timeOffsetText)
+                    .font(.system(size: 14, weight: .medium, design: .monospaced))
+                    .foregroundColor(.primary)
+                    .frame(width: 80, height: 44)
+                } else {
+                  Image(systemName: "clock")
+                    .font(.system(size: 20, weight: .medium))
+                    .foregroundColor(.primary)
+                    .frame(width: 50, height: 44)
+                }
               }
-            )
-            .onChange(of: timeOffsetMinutes) {
-              updateTimeOffset(minutes: Int(timeOffsetMinutes))
-            }
+              .buttonStyle(PlainButtonStyle())
 
-            if isEditingSlider {
-              Text(timeOffsetText)
-                .font(.caption)
-                .fontWeight(.medium)
+              // Conditionally show slider
+              if showSlider {
+                Divider()
+                  .frame(height: 24)
+                  .padding(.horizontal, 8)
+                
+                HStack(spacing: 8) {
+                  Slider(
+                    value: $timeOffsetMinutes, in: -1440...1440, step: 15,
+                    onEditingChanged: { editing in
+                      isEditingSlider = editing
+                    }
+                  )
+                  .onChange(of: timeOffsetMinutes) {
+                    updateTimeOffset(minutes: Int(timeOffsetMinutes))
+                  }
+                  .frame(minWidth: 120)
+
+                  Button(action: {
+                    resetTimeOffset()
+                  }) {
+                    Image(systemName: "xmark.circle.fill")
+                      .font(.system(size: 18))
+                      .foregroundColor(.secondary)
+                      .opacity(timeOffsetMinutes == 0 ? 0.5 : 1.0)
+                  }
+                  .buttonStyle(PlainButtonStyle())
+                  .disabled(timeOffsetMinutes == 0)
+                }
+                .padding(.trailing, 12)
+                .transition(
+                  .asymmetric(
+                    insertion: .move(edge: .leading).combined(with: .opacity),
+                    removal: .move(edge: .leading).combined(with: .opacity)
+                  ))
+              }
+            }
+            .padding(.horizontal, showSlider ? 8 : 12)
+            .padding(.vertical, 8)
+            .background(.thickMaterial, in: showSlider ? AnyShape(RoundedRectangle(cornerRadius: 22)) : AnyShape(Circle()))
+            .shadow(color: .black.opacity(0.1), radius: 8, x: 0, y: 2)
+
+            Spacer(minLength: 24)
+
+            Button(action: {
+              showingAddTimeZone = true
+            }) {
+              Image(systemName: "plus")
+                .font(.system(size: 24, weight: .medium))
                 .foregroundColor(.white)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
-                .background(Color.black.opacity(0.8))
-                .cornerRadius(6)
-                .offset(
-                  x: thumbPosition,
-                  y: -40
-                )
-                .transition(.opacity)
-                .animation(.easeInOut(duration: 0.2), value: isEditingSlider)
+                .frame(width: 50, height: 50)
+                .background(Color.blue)
+                .clipShape(Circle())
             }
           }
-          Button(action: {
-            resetTimeOffset()
-          }) {
-            Image(systemName: "xmark.circle.fill")
-              .font(.system(size: 20))
-              .foregroundColor(.secondary)
-              .opacity(timeOffsetMinutes == 0 ? 0.5 : 1.0)
-          }
-          .buttonStyle(PlainButtonStyle())
-          .disabled(timeOffsetMinutes == 0)
-
-          Spacer(minLength: 24)
-          Button(action: {
-            showingAddTimeZone = true
-          }) {
-            Image(systemName: "plus")
-              .font(.system(size: 24, weight: .medium))
-              .foregroundColor(.white)
-              .frame(width: 50, height: 50)
-              .background(Color.blue)
-              .clipShape(Circle())
-          }
+          .padding(.horizontal, 20)
+          .padding(.bottom, 8)
         }
-        .padding(.horizontal)
-        .padding(.top)
       }
       .onAppear {
         loadTimeZones()
@@ -225,6 +259,8 @@ struct TimeZoneRow: View {
         Text(timeZone.formattedTime)
           .font(.system(.title2, design: .monospaced))
           .fontWeight(.bold)
+          .scaleEffect(timeZone.dynamicTimeScale)
+          .foregroundColor(timeZone.dynamicTimeColor)
 
         Text(timeZone.formattedDate)
           .font(.caption)

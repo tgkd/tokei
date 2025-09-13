@@ -42,6 +42,8 @@ struct SmallTimeZoneWidget: View {
                                 Text(timeZone.formattedTime)
                                     .font(.system(.caption, design: .monospaced))
                                     .fontWeight(.semibold)
+                                    .scaleEffect(timeZone.dynamicTimeScale)
+                                    .foregroundColor(timeZone.dynamicTimeColor)
                                 
                                 Text(timeZone.formattedDate)
                                     .font(.caption2)
@@ -86,7 +88,8 @@ struct MediumTimeZoneWidget: View {
                             Text(timeZone.formattedTime)
                                 .font(.system(.title3, design: .monospaced))
                                 .fontWeight(.bold)
-                                .foregroundColor(timeZone.timeOffset == "Now" ? .green : .primary)
+                                .scaleEffect(timeZone.dynamicTimeScale)
+                                .foregroundColor(timeZone.dynamicTimeColor)
                             
                             Text(timeZone.formattedDate)
                                 .font(.caption2)
@@ -158,31 +161,6 @@ struct MediumTimeZoneWidget: View {
 struct MediumCompactTimeZoneWidget: View {
     let entry: TokeiEntry
     
-    private func dayShiftText(for timeZone: TimeZoneInfo) -> String {
-        let currentDate = Date()
-        let offsetMinutes = UserDefaults.shared.integer(forKey: "time_offset_minutes")
-        let adjustedTime = currentDate.addingTimeInterval(TimeInterval(offsetMinutes * 60))
-        
-        // Get current day in local timezone
-        let localCalendar = Calendar.current
-        let localDay = localCalendar.component(.day, from: adjustedTime)
-        
-        // Get day in target timezone
-        var targetCalendar = Calendar.current
-        targetCalendar.timeZone = timeZone.timeZone
-        let targetDay = targetCalendar.component(.day, from: adjustedTime)
-        
-        let dayDiff = targetDay - localDay
-        
-        if dayDiff > 0 {
-            return "+1day"
-        } else if dayDiff < 0 {
-            return "-1day"
-        } else {
-            return ""
-        }
-    }
-    
     var body: some View {
         VStack(spacing: 8) {
             HStack(spacing: 8) {
@@ -198,28 +176,8 @@ struct MediumCompactTimeZoneWidget: View {
                             .font(.system(.caption, design: .monospaced))
                             .fontWeight(.semibold)
                             .lineLimit(1)
-                            .scaleEffect({
-                                let dayShift = dayShiftText(for: timeZone)
-                                if dayShift == "+1day" {
-                                    return 1.1
-                                } else if dayShift == "-1day" {
-                                    return 0.9
-                                } else {
-                                    return 1.0
-                                }
-                            }())
-                            .foregroundColor({
-                                let dayShift = dayShiftText(for: timeZone)
-                                if dayShift == "+1day" {
-                                    return .orange
-                                } else if dayShift == "-1day" {
-                                    return .blue
-                                } else if timeZone.timeOffset == "Now" {
-                                    return .green
-                                } else {
-                                    return .primary
-                                }
-                            }())
+                            .scaleEffect(timeZone.dynamicTimeScale)
+                            .foregroundColor(timeZone.dynamicTimeColor)
                         
                         VStack(spacing: 0) {
                             Text(timeZone.timeOffset)
@@ -322,7 +280,8 @@ struct LargeTimeZoneWidget: View {
                             Text(timeZone.formattedTime)
                                 .font(.system(.title3, design: .monospaced))
                                 .fontWeight(.bold)
-                                .foregroundColor(timeZone.timeOffset == "Now" ? .green : .primary)
+                                .scaleEffect(timeZone.dynamicTimeScale)
+                                .foregroundColor(timeZone.dynamicTimeColor)
                             
                             Text(timeZone.formattedDate)
                                 .font(.caption2)
@@ -441,7 +400,8 @@ struct CompactSmallWidget: View {
                     Text(timeZone.formattedTime)
                         .font(.system(.caption, design: .monospaced))
                         .fontWeight(.semibold)
-                        .foregroundColor(timeZone.timeOffset == "Now" ? .green : .primary)
+                        .scaleEffect(timeZone.dynamicTimeScale)
+                        .foregroundColor(timeZone.dynamicTimeColor)
                 }
             }
             
@@ -473,7 +433,8 @@ struct CompactMediumWidget: View {
                     Text(timeZone.formattedTime)
                         .font(.system(.caption, design: .monospaced))
                         .fontWeight(.semibold)
-                        .foregroundColor(timeZone.timeOffset == "Now" ? .green : .primary)
+                        .scaleEffect(timeZone.dynamicTimeScale)
+                        .foregroundColor(timeZone.dynamicTimeColor)
                     
                     Text(timeZone.timeOffset)
                         .font(.system(size: 9))
@@ -500,7 +461,8 @@ struct MinimalSmallWidget: View {
                 Text(timeZone.formattedTime)
                     .font(.system(.title2, design: .monospaced))
                     .fontWeight(.bold)
-                    .foregroundColor(timeZone.timeOffset == "Now" ? .green : .primary)
+                    .scaleEffect(timeZone.dynamicTimeScale)
+                    .foregroundColor(timeZone.dynamicTimeColor)
                 
                 Text(timeZone.formattedDate)
                     .font(.caption2)
@@ -535,7 +497,8 @@ struct MinimalMediumWidget: View {
                     Text(timeZone.formattedTime)
                         .font(.system(.title, design: .monospaced))
                         .fontWeight(.bold)
-                        .foregroundColor(timeZone.timeOffset == "Now" ? .green : .primary)
+                        .scaleEffect(timeZone.dynamicTimeScale)
+                        .foregroundColor(timeZone.dynamicTimeColor)
                     
                     Text(timeZone.formattedDate)
                         .font(.caption)

@@ -1,6 +1,7 @@
 import Foundation
 import CoreTransferable
 import UniformTypeIdentifiers
+import SwiftUI
 
 struct TimeZoneInfo: Identifiable, Codable, Transferable {
     let id: UUID
@@ -236,5 +237,52 @@ extension TimeZoneInfo {
                 guard !identifier.hasPrefix("GMT") else { return nil }
                 return SearchableTimeZone(timeZoneIdentifier: identifier)
             }
+    }
+    
+    var dayShiftText: String {
+        let currentDate = Date()
+        let offsetMinutes = UserDefaults.shared.integer(forKey: "time_offset_minutes")
+        let adjustedTime = currentDate.addingTimeInterval(TimeInterval(offsetMinutes * 60))
+        
+        let localCalendar = Calendar.current
+        let localDay = localCalendar.component(.day, from: adjustedTime)
+        
+        var targetCalendar = Calendar.current
+        targetCalendar.timeZone = timeZone
+        let targetDay = targetCalendar.component(.day, from: adjustedTime)
+        
+        let dayDiff = targetDay - localDay
+        
+        if dayDiff > 0 {
+            return "+1day"
+        } else if dayDiff < 0 {
+            return "-1day"
+        } else {
+            return ""
+        }
+    }
+    
+    var dynamicTimeColor: Color {
+        let dayShift = dayShiftText
+        if dayShift == "+1day" {
+            return .orange
+        } else if dayShift == "-1day" {
+            return .blue
+        } else if timeOffset == "Now" {
+            return .green
+        } else {
+            return .primary
+        }
+    }
+    
+    var dynamicTimeScale: CGFloat {
+        let dayShift = dayShiftText
+        if dayShift == "+1day" {
+            return 1.1
+        } else if dayShift == "-1day" {
+            return 0.9
+        } else {
+            return 1.0
+        }
     }
 }
