@@ -16,6 +16,7 @@ struct ContentView: View {
   @State private var timeOffsetMinutes: Double = 0
   @State private var isEditingSlider = false
   @State private var showSlider = false
+  @State private var showSliderContent = false
 
   var body: some View {
     NavigationView {
@@ -65,8 +66,26 @@ struct ContentView: View {
             HStack(spacing: 0) {
               // Toggle slider button on bottom left
               Button(action: {
-                withAnimation(.easeInOut(duration: 0.1)) {
-                  showSlider.toggle()
+                if showSlider {
+                  // When closing: hide slider content first, then close container
+                  withAnimation(.easeInOut(duration: 0.1)) {
+                    showSliderContent = false
+                  }
+                  DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                    withAnimation(.easeInOut(duration: 0.08)) {
+                      showSlider = false
+                    }
+                  }
+                } else {
+                  // When opening: open container first, then show slider content
+                  withAnimation(.easeInOut(duration: 0.08)) {
+                    showSlider = true
+                  }
+                  DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) {
+                    withAnimation(.easeInOut(duration: 0.12)) {
+                      showSliderContent = true
+                    }
+                  }
                 }
               }) {
                 if showSlider {
@@ -85,32 +104,32 @@ struct ContentView: View {
 
               // Conditionally show slider
               if showSlider {
-                Divider()
-                  .frame(height: 24)
-                  .padding(.horizontal, 8)
-                
                 HStack(spacing: 8) {
-                  Slider(
-                    value: $timeOffsetMinutes, in: -1440...1440, step: 15,
-                    onEditingChanged: { editing in
-                      isEditingSlider = editing
+                  if showSliderContent {
+                    Slider(
+                      value: $timeOffsetMinutes, in: -1440...1440, step: 15,
+                      onEditingChanged: { editing in
+                        isEditingSlider = editing
+                      }
+                    )
+                    .onChange(of: timeOffsetMinutes) {
+                      updateTimeOffset(minutes: Int(timeOffsetMinutes))
                     }
-                  )
-                  .onChange(of: timeOffsetMinutes) {
-                    updateTimeOffset(minutes: Int(timeOffsetMinutes))
-                  }
-                  .frame(minWidth: 120)
+                    .frame(minWidth: 120)
+                    .transition(.opacity.combined(with: .scale(scale: 0.8, anchor: .leading)))
 
-                  Button(action: {
-                    resetTimeOffset()
-                  }) {
-                    Image(systemName: "xmark.circle.fill")
-                      .font(.system(size: 18))
-                      .foregroundColor(.secondary)
-                      .opacity(timeOffsetMinutes == 0 ? 0.5 : 1.0)
+                    Button(action: {
+                      resetTimeOffset()
+                    }) {
+                      Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 18))
+                        .foregroundColor(.secondary)
+                        .opacity(timeOffsetMinutes == 0 ? 0.5 : 1.0)
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                    .disabled(timeOffsetMinutes == 0)
+                    .transition(.opacity.combined(with: .scale(scale: 0.8, anchor: .trailing)))
                   }
-                  .buttonStyle(PlainButtonStyle())
-                  .disabled(timeOffsetMinutes == 0)
                 }
                 .padding(.trailing, 12)
                 .transition(
@@ -122,7 +141,7 @@ struct ContentView: View {
             }
             .padding(.horizontal, showSlider ? 8 : 12)
             .padding(.vertical, 8)
-            .background(.thickMaterial, in: showSlider ? AnyShape(RoundedRectangle(cornerRadius: 22)) : AnyShape(Circle()))
+            .background(.thickMaterial, in: showSlider ? AnyShape(RoundedRectangle(cornerRadius: 42)) : AnyShape(Circle()))
             .shadow(color: .black.opacity(0.1), radius: 8, x: 0, y: 2)
 
             Spacer(minLength: 24)
