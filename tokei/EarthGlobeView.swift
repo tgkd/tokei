@@ -1,217 +1,348 @@
+import CoreLocation
 import SceneKit
 import SwiftUI
+import UIKit
 
-// MARK: - City Data Model
-struct City {
-  let name: String
+// MARK: - City Marker Model
+struct CityMarker: Identifiable {
+  let id: UUID
+  let info: TimeZoneInfo
   let latitude: Double
   let longitude: Double
-  let population: Int  // in millions
+
+  init(info: TimeZoneInfo, coordinate: CLLocationCoordinate2D) {
+    self.id = info.id
+    self.info = info
+    latitude = coordinate.latitude
+    longitude = coordinate.longitude
+  }
+
+  var name: String { info.cityName }
 
   var color: UIColor {
-    // Color based on population size
-    if population > 10 {
-      return .systemRed
-    } else if population > 5 {
+    switch info.dayDifference {
+    case let diff where diff > 0:
       return .systemOrange
-    } else {
-      return .systemYellow
+    case let diff where diff < 0:
+      return .systemBlue
+    default:
+      return timeDifferenceHours == 0 ? .systemGreen : .systemYellow
     }
+  }
+
+  private var timeDifferenceHours: Int {
+    let adjustedDate = info.currentTime
+    let localOffset = TimeZone.current.secondsFromGMT(for: adjustedDate)
+    let targetOffset = info.timeZone.secondsFromGMT(for: adjustedDate)
+    return (targetOffset - localOffset) / 3600
   }
 }
 
-// MARK: - Main Earth Globe View
+// MARK: - Main Globe View
 struct EarthGlobeView: View {
+  let timeZones: [TimeZoneInfo]
+
   @State private var scene: SCNScene?
   @State private var cameraNode: SCNNode?
-
-  // Major world cities with coordinates
-  let cities: [City] = [
-    City(name: "Tokyo", latitude: 35.6762, longitude: 139.6503, population: 14),
-    City(name: "Delhi", latitude: 28.7041, longitude: 77.1025, population: 32),
-    City(name: "Shanghai", latitude: 31.2304, longitude: 121.4737, population: 24),
-    City(name: "São Paulo", latitude: -23.5505, longitude: -46.6333, population: 22),
-    City(name: "Mexico City", latitude: 19.4326, longitude: -99.1332, population: 22),
-    City(name: "Cairo", latitude: 30.0444, longitude: 31.2357, population: 21),
-    City(name: "Mumbai", latitude: 19.0760, longitude: 72.8777, population: 20),
-    City(name: "Beijing", latitude: 39.9042, longitude: 116.4074, population: 21),
-    City(name: "Dhaka", latitude: 23.8103, longitude: 90.4125, population: 21),
-    City(name: "Osaka", latitude: 34.6937, longitude: 135.5023, population: 19),
-    City(name: "New York", latitude: 40.7128, longitude: -74.0060, population: 8),
-    City(name: "London", latitude: 51.5074, longitude: -0.1278, population: 9),
-    City(name: "Paris", latitude: 48.8566, longitude: 2.3522, population: 11),
-    City(name: "Moscow", latitude: 55.7558, longitude: 37.6173, population: 12),
-    City(name: "Los Angeles", latitude: 34.0522, longitude: -118.2437, population: 4),
-    City(name: "Buenos Aires", latitude: -34.6037, longitude: -58.3816, population: 15),
-    City(name: "Istanbul", latitude: 41.0082, longitude: 28.9784, population: 15),
-    City(name: "Lagos", latitude: 6.5244, longitude: 3.3792, population: 14),
-    City(name: "Bangkok", latitude: 13.7563, longitude: 100.5018, population: 10),
-    City(name: "Sydney", latitude: -33.8688, longitude: 151.2093, population: 5),
-  ]
+  @State private var earthNode: SCNNode?
+  @State private var sunNode: SCNNode?
+  @State private var rotationTimer: Timer?
+  @State private var userDefaultsObserver: NSObjectProtocol?
+  private let earthRadius: CGFloat = 0.8
 
   var body: some View {
     ZStack {
-      Color.black
-        .ignoresSafeArea()
+      Color.black.ignoresSafeArea()
 
-      SceneView(
-        scene: scene,
-        pointOfView: cameraNode,
-        options: [.allowsCameraControl, .autoenablesDefaultLighting]
-      )
+      OrbitingSceneView(scene: scene, cameraNode: cameraNode, earthNode: earthNode)
       .frame(maxWidth: .infinity, maxHeight: .infinity)
       .background(Color.black)
     }
     .onAppear {
       setupEarthScene()
+      observeDefaults()
+      loadMarkers(for: timeZones)
+      updateEarthRotation()
     }
-    .ignoresSafeArea()
+    .onChange(of: timeZones) { newValue in
+      loadMarkers(for: newValue)
+    }
+    .onDisappear {
+      teardownObservers()
+    }
   }
 
   // MARK: - Scene Setup
   private func setupEarthScene() {
-    if scene != nil {
-      return
-    }
+    if scene != nil { return }
 
     let scene = SCNScene()
-    scene.background.contents = createSpaceBackground()
+    scene.background.contents = UIColor(red: 0.01, green: 0.01, blue: 0.02, alpha: 1.0)
+    scene.fogColor = UIColor.black
+    scene.fogStartDistance = 14
+    scene.fogEndDistance = 28
+    scene.fogDensityExponent = 0.25
+    scene.lightingEnvironment.intensity = 1.0
 
-    // Earth Node
-    let earthGeometry = SCNSphere(radius: 1.0)
-    earthGeometry.segmentCount = 100  // Higher quality sphere
+    let earthGeometry = SCNSphere(radius: earthRadius)
+    earthGeometry.segmentCount = 220
     let earthNode = SCNNode(geometry: earthGeometry)
+    earthNode.eulerAngles.x = -0.35
+    earthNode.name = "earth"
 
-    // Earth Materials with realistic textures
     let earthMaterial = SCNMaterial()
     if let dayTexture = UIImage(named: "EarthDay") {
       earthMaterial.diffuse.contents = dayTexture
     } else {
-      earthMaterial.diffuse.contents = UIColor(red: 0.05, green: 0.1, blue: 0.2, alpha: 1.0)
+      earthMaterial.diffuse.contents = UIColor(red: 0.04, green: 0.08, blue: 0.16, alpha: 1.0)
     }
-    earthMaterial.specular.contents = UIColor.white.withAlphaComponent(0.5)
-    earthMaterial.shininess = 0.1
+    earthMaterial.specular.contents = UIColor.white.withAlphaComponent(0.15)
+    earthMaterial.specular.intensity = 0.3
+    earthMaterial.shininess = 0.05
 
     if let nightTexture = UIImage(named: "EarthNight") {
       earthMaterial.emission.contents = nightTexture
       earthMaterial.emission.intensity = 0.5
     } else {
       earthMaterial.emission.contents = UIColor.black
-      earthMaterial.emission.intensity = 0.4
+      earthMaterial.emission.intensity = 0.12
     }
-    earthMaterial.lightingModel = .phong
-
+    earthMaterial.lightingModel = .physicallyBased
+    earthMaterial.roughness.contents = 0.45
+    earthMaterial.metalness.contents = 0.04
+    earthMaterial.multiply.contents = UIColor(white: 0.85, alpha: 1.0)
     earthGeometry.materials = [earthMaterial]
 
-    // Atmosphere Glow
-    let atmosphereGeometry = SCNSphere(radius: 1.1)
-    atmosphereGeometry.segmentCount = 100
-    let atmosphereNode = SCNNode(geometry: atmosphereGeometry)
+    let haloNode = createEarthHaloNode(radius: earthRadius * 2.1)
+    earthNode.addChildNode(haloNode)
 
-    let atmosphereMaterial = SCNMaterial()
-    atmosphereMaterial.diffuse.contents = UIColor.clear
-    atmosphereMaterial.emission.contents = UIColor.cyan.withAlphaComponent(0.1)
-    atmosphereMaterial.emission.intensity = 0.5
-    atmosphereMaterial.isDoubleSided = true
-    atmosphereMaterial.cullMode = .front
-    atmosphereMaterial.blendMode = .add
-    atmosphereGeometry.materials = [atmosphereMaterial]
-
-    // Camera Setup
     let cameraNode = SCNNode()
     cameraNode.camera = SCNCamera()
     cameraNode.camera?.fieldOfView = 60
     cameraNode.camera?.zNear = 0.1
-    cameraNode.camera?.zFar = 100
-    cameraNode.position = SCNVector3(0, 0, 3)
+    cameraNode.camera?.zFar = 120
+    cameraNode.camera?.wantsHDR = false
+    positionCameraForLocalTimezone(cameraNode: cameraNode, earthNode: earthNode)
 
-    // Sun Light (Directional)
     let sunNode = SCNNode()
     sunNode.light = SCNLight()
     sunNode.light?.type = .directional
-    sunNode.light?.intensity = 1200
-    sunNode.light?.color = UIColor.white
+    sunNode.light?.intensity = 520
+    sunNode.light?.color = UIColor(red: 0.95, green: 0.93, blue: 0.9, alpha: 1.0)
     sunNode.light?.castsShadow = true
-    sunNode.position = SCNVector3(5, 3, 2)
-    sunNode.look(at: SCNVector3(0, 0, 0))
+    sunNode.light?.shadowMode = .deferred
+    sunNode.light?.shadowSampleCount = 16
+    sunNode.light?.shadowRadius = 14
+    sunNode.light?.shadowColor = UIColor.black.withAlphaComponent(0.4)
+    sunNode.light?.temperature = 5400
+    updateSunPosition(sunNode: sunNode)
+    sunNode.addChildNode(createSunHaloNode())
 
-    // Ambient Light
     let ambientLightNode = SCNNode()
     ambientLightNode.light = SCNLight()
     ambientLightNode.light?.type = .ambient
-    ambientLightNode.light?.intensity = 200
-    ambientLightNode.light?.color = UIColor(white: 0.3, alpha: 1.0)
+    ambientLightNode.light?.intensity = 140
+    ambientLightNode.light?.color = UIColor(red: 0.08, green: 0.14, blue: 0.23, alpha: 1.0)
 
-    // Add nodes to scene
+    let bounceLightNode = SCNNode()
+    bounceLightNode.light = SCNLight()
+    bounceLightNode.light?.type = .omni
+    bounceLightNode.light?.intensity = 30
+    bounceLightNode.light?.color = UIColor(red: 0.3, green: 0.4, blue: 0.7, alpha: 1.0)
+    bounceLightNode.position = SCNVector3(-4, -1, -3)
+
     scene.rootNode.addChildNode(earthNode)
-    scene.rootNode.addChildNode(atmosphereNode)
     scene.rootNode.addChildNode(cameraNode)
     scene.rootNode.addChildNode(sunNode)
     scene.rootNode.addChildNode(ambientLightNode)
+    scene.rootNode.addChildNode(bounceLightNode)
 
-    // Add city markers
-    addCityMarkers(to: earthNode)
-
-    // Animations
-    let earthRotation = SCNAction.rotateBy(x: 0, y: CGFloat.pi * 2, z: 0, duration: 120)
-    let repeatEarthRotation = SCNAction.repeatForever(earthRotation)
-    earthNode.runAction(repeatEarthRotation)
-
-    // Sun orbit for day/night cycle
-    let sunOrbit = SCNAction.rotateBy(x: 0, y: CGFloat.pi * 2, z: 0, duration: 60)
-    let repeatSunOrbit = SCNAction.repeatForever(sunOrbit)
-    sunNode.runAction(repeatSunOrbit, forKey: "sunOrbit")
-
-    // Store references
     self.scene = scene
     self.cameraNode = cameraNode
+    self.earthNode = earthNode
+    self.sunNode = sunNode
   }
 
-  // MARK: - City Markers
-  private func addCityMarkers(to earthNode: SCNNode) {
-    for city in cities {
-      let markerNode = createCityMarker(for: city)
-      earthNode.addChildNode(markerNode)
+  // MARK: - Rotation Sync
+  private func updateEarthRotation() {
+    guard let earthNode else { return }
+
+    earthNode.removeAction(forKey: "earthRotation")
+
+    let offsetMinutes = UserDefaults.shared.integer(forKey: "time_offset_minutes")
+    let adjustedDate = Date().addingTimeInterval(TimeInterval(offsetMinutes * 60))
+
+    var calendar = Calendar(identifier: .gregorian)
+    calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+    let components = calendar.dateComponents([.hour, .minute, .second], from: adjustedDate)
+    let hours = Double(components.hour ?? 0) * 3600.0
+    let minutes = Double(components.minute ?? 0) * 60.0
+    let seconds = Double(components.second ?? 0)
+    let totalSeconds = hours + minutes + seconds
+    let fractionOfDay = totalSeconds / 86400.0
+
+    let angle = Float(fractionOfDay * 2 * Double.pi - Double.pi)
+
+    SCNTransaction.begin()
+    SCNTransaction.animationDuration = 0.25
+    earthNode.eulerAngles.y = angle
+    SCNTransaction.commit()
+
+    if let sunNode {
+      updateSunPosition(sunNode: sunNode)
+    }
+
+    let rotation = SCNAction.rotateBy(x: 0, y: CGFloat.pi * 2, z: 0, duration: 86400)
+    rotation.timingMode = .linear
+    earthNode.runAction(.repeatForever(rotation), forKey: "earthRotation")
+  }
+
+  private func updateSunPosition(sunNode: SCNNode) {
+    let offsetMinutes = UserDefaults.shared.integer(forKey: "time_offset_minutes")
+    let adjustedDate = Date().addingTimeInterval(TimeInterval(offsetMinutes * 60))
+
+    var calendar = Calendar(identifier: .gregorian)
+    calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+    let dayOfYear = calendar.ordinality(of: .day, in: .year, for: adjustedDate) ?? 1
+
+    let declination = -23.44 * cos((360.0 / 365.0) * (Double(dayOfYear) + 10) * Double.pi / 180.0)
+    let declinationRad = declination * Double.pi / 180.0
+
+    let distance: Double = 10.0
+    let z = Float(distance * cos(declinationRad))
+    let y = Float(distance * sin(declinationRad))
+
+    sunNode.position = SCNVector3(0, y, z)
+    sunNode.look(at: SCNVector3Zero)
+  }
+
+  private func observeDefaults() {
+    if rotationTimer == nil {
+      rotationTimer = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { _ in
+        updateEarthRotation()
+      }
+    }
+
+    if userDefaultsObserver == nil {
+      userDefaultsObserver = NotificationCenter.default.addObserver(
+        forName: UserDefaults.didChangeNotification,
+        object: UserDefaults.shared,
+        queue: .main
+      ) { _ in
+        updateEarthRotation()
+      }
     }
   }
 
-  private func createCityMarker(for city: City) -> SCNNode {
-    // Convert lat/lon to 3D coordinates
-    let position = latLonToPosition(lat: city.latitude, lon: city.longitude, radius: 1.01)
+  private func teardownObservers() {
+    rotationTimer?.invalidate()
+    rotationTimer = nil
 
-    // Create marker sphere
-    let markerGeometry = SCNSphere(radius: 0.01)
+    if let observer = userDefaultsObserver {
+      NotificationCenter.default.removeObserver(observer)
+      userDefaultsObserver = nil
+    }
+  }
+
+  private func positionCameraForLocalTimezone(cameraNode: SCNNode, earthNode: SCNNode) {
+    let distance: Float = 3.6
+    let angleY: Float = 0.15
+    var angleX: Float = 0
+
+    if let localCoord = TimeZoneCoordinates.coordinate(for: TimeZone.current.identifier) {
+      let lonRad = Float((localCoord.longitude + 180) * .pi / 180.0)
+      angleX = lonRad + earthNode.eulerAngles.y
+    }
+
+    let x = distance * sin(angleX) * cos(angleY)
+    let y = distance * sin(angleY)
+    let z = distance * cos(angleX) * cos(angleY)
+    cameraNode.position = SCNVector3(x, y, z)
+    cameraNode.look(at: SCNVector3Zero)
+  }
+
+  // MARK: - Markers
+  private func loadMarkers(for timeZones: [TimeZoneInfo]) {
+    let markers = timeZones.compactMap { info -> CityMarker? in
+      guard let coord = info.coordinate else { return nil }
+      return CityMarker(info: info, coordinate: coord)
+    }
+    updateCityMarkers(with: markers)
+  }
+
+  @MainActor
+  private func updateCityMarkers(with markers: [CityMarker]) {
+    guard let earthNode else { return }
+
+    for node in earthNode.childNodes where node.name?.hasPrefix("marker-") == true {
+      node.removeFromParentNode()
+    }
+
+    for marker in markers {
+      let node = createCityMarker(for: marker)
+      earthNode.addChildNode(node)
+    }
+  }
+
+  private func createCityMarker(for marker: CityMarker) -> SCNNode {
+    let position = latLonToPosition(lat: marker.latitude, lon: marker.longitude, radiusOffset: 1.012)
+
+    let markerGeometry = SCNSphere(radius: 0.014)
+    markerGeometry.segmentCount = 48
     let markerNode = SCNNode(geometry: markerGeometry)
     markerNode.position = position
-    markerNode.name = city.name
+    markerNode.name = "marker-\(marker.id.uuidString)"
 
-    // Marker material with glow effect
     let material = SCNMaterial()
-    material.diffuse.contents = city.color
-    material.emission.contents = city.color
-    material.emission.intensity = 2.0
+    material.diffuse.contents = marker.color
+    material.emission.contents = marker.color
+    material.emission.intensity = 0.7
+    material.lightingModel = .physicallyBased
     markerGeometry.materials = [material]
 
-    // Add pulse animation
-    let scaleUp = SCNAction.scale(to: 1.5, duration: 0.5)
-    let scaleDown = SCNAction.scale(to: 1.0, duration: 0.5)
+    let scaleUp = SCNAction.scale(to: 1.2, duration: 1.1)
+    let scaleDown = SCNAction.scale(to: 1.0, duration: 1.1)
     let pulse = SCNAction.sequence([scaleUp, scaleDown])
-    let repeatPulse = SCNAction.repeatForever(pulse)
-    markerNode.runAction(repeatPulse)
+    markerNode.runAction(.repeatForever(pulse))
 
-    // Add label
-    let textGeometry = SCNText(string: city.name, extrusionDepth: 0.01)
-    textGeometry.font = UIFont.systemFont(ofSize: 0.05)
-    textGeometry.alignmentMode = CATextLayerAlignmentMode.center.rawValue
-    textGeometry.firstMaterial?.diffuse.contents = UIColor.white
-    textGeometry.firstMaterial?.emission.contents = UIColor.white
-    textGeometry.firstMaterial?.emission.intensity = 0.5
+    markerNode.addChildNode(createMarkerGlowNode(color: marker.color))
+
+    let cityLine = marker.name.uppercased()
+    let timeLine = "\(marker.info.formattedTime) \(marker.info.shortCityName) \(marker.info.timeOffset)"
+    let textGeometry = SCNText(string: "\(cityLine)\n\(timeLine)", extrusionDepth: 0.0)
+    textGeometry.font = UIFont.systemFont(ofSize: 0.08, weight: .bold)
+    textGeometry.firstMaterial?.diffuse.contents = UIColor(white: 0.95, alpha: 1.0)
+    textGeometry.firstMaterial?.emission.contents = UIColor(white: 1.0, alpha: 1.0)
+    textGeometry.firstMaterial?.emission.intensity = 0.9
+    textGeometry.firstMaterial?.writesToDepthBuffer = false
+    textGeometry.flatness = 0.08
 
     let textNode = SCNNode(geometry: textGeometry)
-    textNode.position = SCNVector3(0, 0.02, 0)
-    textNode.scale = SCNVector3(0.003, 0.003, 0.003)
+    textNode.position = SCNVector3(0, 0.028, 0)
+    textNode.scale = SCNVector3(0.004, 0.004, 0.004)
+    textNode.renderingOrder = 50
 
-    // Billboard constraint to always face camera
+    let bounds = textGeometry.boundingBox
+    let textCenterX = (bounds.min.x + bounds.max.x) / 2
+    let textCenterY = (bounds.min.y + bounds.max.y) / 2
+    textNode.pivot = SCNMatrix4MakeTranslation(textCenterX, textCenterY, 0)
+
+    let bgPadding: Float = 0.06
+    let bgWidth = CGFloat(bounds.max.x - bounds.min.x + bgPadding * 2)
+    let bgHeight = CGFloat(bounds.max.y - bounds.min.y + bgPadding * 2)
+    let bgPlane = SCNPlane(width: bgWidth, height: bgHeight)
+    let bgMaterial = SCNMaterial()
+    bgMaterial.diffuse.contents = UIColor(white: 0.0, alpha: 0.55)
+    bgMaterial.emission.contents = UIColor(white: 0.0, alpha: 0.55)
+    bgMaterial.isDoubleSided = true
+    bgMaterial.writesToDepthBuffer = false
+    bgPlane.materials = [bgMaterial]
+    bgPlane.cornerRadius = CGFloat(bgPadding * 0.5)
+    let bgNode = SCNNode(geometry: bgPlane)
+    bgNode.position = SCNVector3(textCenterX, textCenterY, -0.01)
+    bgNode.renderingOrder = 49
+    textNode.addChildNode(bgNode)
+
     let billboardConstraint = SCNBillboardConstraint()
     billboardConstraint.freeAxes = .all
     textNode.constraints = [billboardConstraint]
@@ -221,44 +352,253 @@ struct EarthGlobeView: View {
     return markerNode
   }
 
-  // MARK: - Coordinate Conversion
-  private func latLonToPosition(lat: Double, lon: Double, radius: Double) -> SCNVector3 {
-    let latRad = lat * Double.pi / 180.0
-    let lonRad = lon * Double.pi / 180.0
+  // MARK: - Helpers
+  private func createEarthHaloNode(radius: CGFloat) -> SCNNode {
+    let plane = SCNPlane(width: radius, height: radius)
+    let material = SCNMaterial()
+    let glowImage = Self.makeRadialGradientImage(
+      size: CGSize(width: 512, height: 512),
+      centerColor: UIColor(red: 0.15, green: 0.35, blue: 0.7, alpha: 0.1),
+      edgeColor: UIColor.clear
+    )
+    material.diffuse.contents = glowImage
+    material.emission.contents = glowImage
+    material.isDoubleSided = true
+    material.blendMode = .add
+    material.writesToDepthBuffer = false
+    material.readsFromDepthBuffer = false
+    plane.materials = [material]
 
-    let x = Float(radius * cos(latRad) * cos(lonRad))
+    let node = SCNNode(geometry: plane)
+    let billboard = SCNBillboardConstraint()
+    billboard.freeAxes = .all
+    node.constraints = [billboard]
+    node.opacity = 0.06
+    node.renderingOrder = -5
+    return node
+  }
+
+  private func createSunHaloNode() -> SCNNode {
+    let plane = SCNPlane(width: 1.5, height: 1.5)
+    let material = SCNMaterial()
+    let haloImage = Self.makeRadialGradientImage(
+      size: CGSize(width: 400, height: 400),
+      centerColor: UIColor(red: 0.9, green: 0.9, blue: 0.85, alpha: 0.3),
+      edgeColor: UIColor.clear
+    )
+    material.diffuse.contents = haloImage
+    material.emission.contents = haloImage
+    material.isDoubleSided = true
+    material.blendMode = .add
+    material.writesToDepthBuffer = false
+    plane.materials = [material]
+
+    let node = SCNNode(geometry: plane)
+    let billboard = SCNBillboardConstraint()
+    billboard.freeAxes = .all
+    node.constraints = [billboard]
+    node.opacity = 0.1
+    return node
+  }
+
+  private func createMarkerGlowNode(color: UIColor) -> SCNNode {
+    let plane = SCNPlane(width: 0.05, height: 0.05)
+    let material = SCNMaterial()
+    let glowImage = Self.makeRadialGradientImage(
+      size: CGSize(width: 256, height: 256),
+      centerColor: color.withAlphaComponent(0.3),
+      edgeColor: UIColor.clear
+    )
+    material.diffuse.contents = glowImage
+    material.emission.contents = glowImage
+    material.isDoubleSided = true
+    material.blendMode = .add
+    material.writesToDepthBuffer = false
+    plane.materials = [material]
+
+    let node = SCNNode(geometry: plane)
+    let constraint = SCNBillboardConstraint()
+    constraint.freeAxes = .all
+    node.constraints = [constraint]
+    node.opacity = 0.2
+    return node
+  }
+
+  private func latLonToPosition(lat: Double, lon: Double, radiusOffset: Double) -> SCNVector3 {
+    let latRad = lat * Double.pi / 180.0
+    let lonRad = (lon + 180) * Double.pi / 180.0
+
+    let radius = Double(earthRadius) * radiusOffset
+    let x = Float(radius * cos(latRad) * sin(lonRad))
     let y = Float(radius * sin(latRad))
-    let z = Float(radius * cos(latRad) * sin(lonRad))
+    let z = Float(radius * cos(latRad) * cos(lonRad))
 
     return SCNVector3(x, y, z)
   }
 
-  // MARK: - Texture Generation (Fallbacks)
-  private func createSpaceBackground() -> UIImage {
-    let size = CGSize(width: 1024, height: 1024)
+  private static func makeRadialGradientImage(
+    size: CGSize,
+    centerColor: UIColor,
+    edgeColor: UIColor,
+    center: CGPoint = CGPoint(x: 0.5, y: 0.5),
+    endRadiusMultiplier: CGFloat = 0.6
+  ) -> UIImage {
     let renderer = UIGraphicsImageRenderer(size: size)
-
     return renderer.image { context in
-      // Black space background
-      context.cgContext.setFillColor(UIColor.black.cgColor)
-      context.cgContext.fill(CGRect(origin: .zero, size: size))
-
-      // Add stars
-      for _ in 0..<500 {
-        let x = CGFloat.random(in: 0..<size.width)
-        let y = CGFloat.random(in: 0..<size.height)
-        let starSize = CGFloat.random(in: 0.5..<2.0)
-        let brightness = CGFloat.random(in: 0.3..<1.0)
-
-        context.cgContext.setFillColor(UIColor(white: brightness, alpha: 1.0).cgColor)
-        context.cgContext.fillEllipse(in: CGRect(x: x, y: y, width: starSize, height: starSize))
+      guard
+        let gradient = CGGradient(
+          colorsSpace: CGColorSpaceCreateDeviceRGB(),
+          colors: [centerColor.cgColor, edgeColor.cgColor] as CFArray,
+          locations: [0, 1]
+        )
+      else {
+        return
       }
+
+      let centerPoint = CGPoint(x: size.width * center.x, y: size.height * center.y)
+      let radius = min(size.width, size.height) * endRadiusMultiplier
+      context.cgContext.drawRadialGradient(
+        gradient,
+        startCenter: centerPoint,
+        startRadius: 0,
+        endCenter: centerPoint,
+        endRadius: radius,
+        options: [.drawsAfterEndLocation]
+      )
+    }
+  }
+
+}
+
+// MARK: - Scene View Wrapper
+private struct OrbitingSceneView: UIViewRepresentable {
+  var scene: SCNScene?
+  var cameraNode: SCNNode?
+  var earthNode: SCNNode?
+
+  func makeUIView(context: Context) -> SCNView {
+    let view = SCNView()
+    view.allowsCameraControl = false
+    view.autoenablesDefaultLighting = false
+    view.backgroundColor = .clear
+    view.antialiasingMode = .multisampling4X
+
+    let pan = UIPanGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.handlePan(_:)))
+    view.addGestureRecognizer(pan)
+
+    let pinch = UIPinchGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.handlePinch(_:)))
+    view.addGestureRecognizer(pinch)
+
+    let doubleTap = UITapGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.handleDoubleTap(_:)))
+    doubleTap.numberOfTapsRequired = 2
+    view.addGestureRecognizer(doubleTap)
+
+    return view
+  }
+
+  func updateUIView(_ uiView: SCNView, context: Context) {
+    if uiView.scene !== scene {
+      uiView.scene = scene
+    }
+    uiView.pointOfView = cameraNode
+    context.coordinator.cameraNode = cameraNode
+    context.coordinator.earthNode = earthNode
+  }
+
+  func makeCoordinator() -> Coordinator {
+    Coordinator(cameraNode: cameraNode, earthNode: earthNode)
+  }
+
+  final class Coordinator: NSObject {
+    var cameraNode: SCNNode?
+    var earthNode: SCNNode?
+    private var lastPanPoint: CGPoint = .zero
+    private var cameraDistance: Float = defaultDistance
+    private var cameraAngleX: Float = 0
+    private var cameraAngleY: Float = 0
+
+    static let defaultDistance: Float = 3.6
+    private let minDistance: Float = 2.7
+    private let maxDistance: Float = defaultDistance
+    private let maxVerticalAngle: Float = 1.2
+
+    init(cameraNode: SCNNode?, earthNode: SCNNode?) {
+      self.cameraNode = cameraNode
+      self.earthNode = earthNode
+      super.init()
+    }
+
+    private func applyCamera() {
+      guard let cameraNode else { return }
+      let x = cameraDistance * sin(cameraAngleX) * cos(cameraAngleY)
+      let y = cameraDistance * sin(cameraAngleY)
+      let z = cameraDistance * cos(cameraAngleX) * cos(cameraAngleY)
+      cameraNode.position = SCNVector3(x, y, z)
+      cameraNode.look(at: SCNVector3Zero)
+    }
+
+    @objc func handlePan(_ gesture: UIPanGestureRecognizer) {
+      guard cameraNode != nil else { return }
+      let translation = gesture.translation(in: gesture.view)
+
+      if gesture.state == .began {
+        lastPanPoint = .zero
+      }
+
+      let dx = Float(translation.x - lastPanPoint.x) * 0.005
+      let dy = Float(translation.y - lastPanPoint.y) * 0.005
+      lastPanPoint = CGPoint(x: translation.x, y: translation.y)
+
+      cameraAngleX -= dx
+      cameraAngleY += dy
+      cameraAngleY = max(-maxVerticalAngle, min(maxVerticalAngle, cameraAngleY))
+
+      applyCamera()
+    }
+
+    @objc func handlePinch(_ gesture: UIPinchGestureRecognizer) {
+      guard cameraNode != nil else { return }
+
+      if gesture.state == .changed {
+        cameraDistance /= Float(gesture.scale)
+        cameraDistance = max(minDistance, min(maxDistance, cameraDistance))
+        gesture.scale = 1.0
+        applyCamera()
+      }
+    }
+
+    @objc func handleDoubleTap(_ gesture: UITapGestureRecognizer) {
+      guard let cameraNode else { return }
+
+      var targetAngleX: Float = 0
+      if let localCoord = TimeZoneCoordinates.coordinate(for: TimeZone.current.identifier),
+         let earthNode {
+        let lonRad = Float((localCoord.longitude + 180) * .pi / 180.0)
+        targetAngleX = lonRad + earthNode.eulerAngles.y
+      }
+
+      SCNTransaction.begin()
+      SCNTransaction.animationDuration = 0.5
+      SCNTransaction.animationTimingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+
+      cameraAngleX = targetAngleX
+      cameraAngleY = 0.15
+      cameraDistance = Self.defaultDistance
+
+      let x = cameraDistance * sin(cameraAngleX) * cos(cameraAngleY)
+      let y = cameraDistance * sin(cameraAngleY)
+      let z = cameraDistance * cos(cameraAngleX) * cos(cameraAngleY)
+      cameraNode.position = SCNVector3(x, y, z)
+      cameraNode.look(at: SCNVector3Zero)
+
+      SCNTransaction.commit()
     }
   }
 }
 
+
 // MARK: - Preview
 #Preview {
-  EarthGlobeView()
+  EarthGlobeView(timeZones: Array(TimeZoneInfo.defaultTimeZones.prefix(3)))
     .ignoresSafeArea()
 }

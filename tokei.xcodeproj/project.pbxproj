@@ -48,6 +48,7 @@
 		991219C82E7457CD004EE99C /* Exceptions for "tokei" folder in "tokeiWidgetExtension" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
+				TimeZoneCoordinates.swift,
 				TimeZoneModels.swift,
 			);
 			target = 999EBD582E70301200E84297 /* tokeiWidgetExtension */;

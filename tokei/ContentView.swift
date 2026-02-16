@@ -17,49 +17,42 @@ struct ContentView: View {
   var body: some View {
     NavigationView {
       GeometryReader { _ in
-        ZStack {
-          Color(UIColor.systemBackground)
+        ZStack(alignment: .bottom) {
+          EarthGlobeView(timeZones: timeZones)
             .ignoresSafeArea()
 
-          VStack(spacing: 0) {
-            EarthGlobeView()
-              .frame(maxWidth: .infinity)
-              .frame(maxHeight: .infinity)
+          VStack(spacing: 16) {
+            HStack {
+              VStack(alignment: .leading, spacing: 4) {
+                Text("Current Time")
+                  .font(.caption)
+                  .foregroundColor(.secondary)
 
-            VStack(spacing: 16) {
-              HStack {
-                VStack(alignment: .leading, spacing: 4) {
-                  Text("Current Time")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-
-                  Text(currentTime, style: .time)
-                    .font(.system(size: 32, weight: .bold, design: .monospaced))
-                    .foregroundColor(.primary)
-                }
-
-                Spacer()
-
-                VStack(alignment: .trailing, spacing: 4) {
-                  Text("Time Zones")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-
-                  Text("\(timeZones.count)")
-                    .font(.system(size: 32, weight: .bold))
-                    .foregroundColor(.blue)
-                }
+                Text(currentTime, style: .time)
+                  .font(.system(size: 32, weight: .bold, design: .monospaced))
+                  .foregroundColor(.primary)
               }
-              .padding(.horizontal, 20)
+
+              Spacer()
+
+              VStack(alignment: .trailing, spacing: 4) {
+                Text("Time Zones")
+                  .font(.caption)
+                  .foregroundColor(.secondary)
+
+                Text("\(timeZones.count)")
+                  .font(.system(size: 32, weight: .bold))
+                  .foregroundColor(.blue)
+              }
             }
-            .padding(.vertical, 24)
-            .frame(maxWidth: .infinity)
-            .background(.thinMaterial)
-            .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
-            .padding(.horizontal, 24)
-            .padding(.bottom, 24)
+            .padding(.horizontal, 20)
           }
-          .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+          .padding(.vertical, 24)
+          .frame(maxWidth: .infinity)
+          .background(.ultraThinMaterial)
+          .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
+          .padding(.horizontal, 24)
+          .padding(.bottom, 24)
         }
       }
       .onReceive(timer) { _ in

@@ -1,21 +1,26 @@
-import Foundation
+import CoreLocation
 import CoreTransferable
-import UniformTypeIdentifiers
+import Foundation
 import SwiftUI
+import UniformTypeIdentifiers
 
-struct TimeZoneInfo: Identifiable, Codable, Transferable {
+struct TimeZoneInfo: Identifiable, Codable, Transferable, Equatable {
     let id: UUID
     let cityName: String
     let timeZoneIdentifier: String
-    
+
     init(cityName: String, timeZoneIdentifier: String) {
         self.id = UUID()
         self.cityName = cityName
         self.timeZoneIdentifier = timeZoneIdentifier
     }
-    
+
     var timeZone: TimeZone {
         TimeZone(identifier: timeZoneIdentifier) ?? TimeZone.current
+    }
+
+    var coordinate: CLLocationCoordinate2D? {
+        TimeZoneCoordinates.coordinate(for: timeZoneIdentifier)
     }
     
     var shortCityName: String {
@@ -172,6 +177,14 @@ struct TimeZoneInfo: Identifiable, Codable, Transferable {
     
     static var transferRepresentation: some TransferRepresentation {
         CodableRepresentation(contentType: .data)
+    }
+}
+
+extension TimeZoneInfo {
+    static func == (lhs: TimeZoneInfo, rhs: TimeZoneInfo) -> Bool {
+        lhs.id == rhs.id
+            && lhs.cityName == rhs.cityName
+            && lhs.timeZoneIdentifier == rhs.timeZoneIdentifier
     }
 }
 
