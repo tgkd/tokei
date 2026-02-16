@@ -22,11 +22,13 @@ struct CityMarker: Identifiable {
   var color: UIColor {
     switch info.dayDifference {
     case let diff where diff > 0:
-      return .systemOrange
+      return UIColor(red: 0.75, green: 0.48, blue: 0.22, alpha: 1.0)
     case let diff where diff < 0:
-      return .systemBlue
+      return UIColor(red: 0.32, green: 0.48, blue: 0.68, alpha: 1.0)
     default:
-      return timeDifferenceHours == 0 ? .systemGreen : .systemYellow
+      return timeDifferenceHours == 0
+        ? UIColor(red: 0.35, green: 0.58, blue: 0.38, alpha: 1.0)
+        : UIColor(red: 0.72, green: 0.62, blue: 0.28, alpha: 1.0)
     }
   }
 
@@ -296,7 +298,7 @@ struct EarthGlobeView: View {
     let material = SCNMaterial()
     material.diffuse.contents = marker.color
     material.emission.contents = marker.color
-    material.emission.intensity = 0.7
+    material.emission.intensity = 0.4
     material.lightingModel = .physicallyBased
     markerGeometry.materials = [material]
 
@@ -306,6 +308,16 @@ struct EarthGlobeView: View {
     markerNode.runAction(.repeatForever(pulse))
 
     markerNode.addChildNode(createMarkerGlowNode(color: marker.color))
+
+    let hitGeometry = SCNSphere(radius: 0.04)
+    hitGeometry.segmentCount = 8
+    let hitMaterial = SCNMaterial()
+    hitMaterial.diffuse.contents = UIColor.clear
+    hitMaterial.transparency = 0.001
+    hitGeometry.materials = [hitMaterial]
+    let hitNode = SCNNode(geometry: hitGeometry)
+    hitNode.name = "hitTarget"
+    markerNode.addChildNode(hitNode)
 
     let cityLine = marker.name.uppercased()
     let timeLine = "\(marker.info.formattedTime) \(marker.info.shortCityName) \(marker.info.timeOffset)"
@@ -318,9 +330,11 @@ struct EarthGlobeView: View {
     textGeometry.flatness = 0.08
 
     let textNode = SCNNode(geometry: textGeometry)
+    textNode.name = "markerText"
     textNode.position = SCNVector3(0, 0.028, 0)
     textNode.scale = SCNVector3(0.004, 0.004, 0.004)
     textNode.renderingOrder = 50
+    textNode.isHidden = true
 
     let bounds = textGeometry.boundingBox
     let textCenterX = (bounds.min.x + bounds.max.x) / 2
@@ -493,6 +507,11 @@ private struct OrbitingSceneView: UIViewRepresentable {
     doubleTap.numberOfTapsRequired = 2
     view.addGestureRecognizer(doubleTap)
 
+    let singleTap = UITapGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.handleTap(_:)))
+    singleTap.numberOfTapsRequired = 1
+    singleTap.require(toFail: doubleTap)
+    view.addGestureRecognizer(singleTap)
+
     return view
   }
 
@@ -521,6 +540,7 @@ private struct OrbitingSceneView: UIViewRepresentable {
     private let minDistance: Float = 2.7
     private let maxDistance: Float = defaultDistance
     private let maxVerticalAngle: Float = 1.2
+    private var selectedMarkerName: String?
 
     init(cameraNode: SCNNode?, earthNode: SCNNode?) {
       self.cameraNode = cameraNode
@@ -564,6 +584,39 @@ private struct OrbitingSceneView: UIViewRepresentable {
         cameraDistance = max(minDistance, min(maxDistance, cameraDistance))
         gesture.scale = 1.0
         applyCamera()
+      }
+    }
+
+    @objc func handleTap(_ gesture: UITapGestureRecognizer) {
+      guard let scnView = gesture.view as? SCNView, let earthNode else { return }
+      let location = gesture.location(in: scnView)
+      let hitResults = scnView.hitTest(location, options: [
+        .searchMode: SCNHitTestSearchMode.all.rawValue,
+        .boundingBoxOnly: true as NSNumber
+      ])
+
+      var tappedMarkerNode: SCNNode?
+      for result in hitResults {
+        var node: SCNNode? = result.node
+        while let current = node {
+          if let name = current.name, name.hasPrefix("marker-") {
+            tappedMarkerNode = current
+            break
+          }
+          node = current.parent
+        }
+        if tappedMarkerNode != nil { break }
+      }
+
+      for child in earthNode.childNodes where child.name?.hasPrefix("marker-") == true {
+        child.childNode(withName: "markerText", recursively: false)?.isHidden = true
+      }
+
+      if let tapped = tappedMarkerNode, tapped.name != selectedMarkerName {
+        selectedMarkerName = tapped.name
+        tapped.childNode(withName: "markerText", recursively: false)?.isHidden = false
+      } else {
+        selectedMarkerName = nil
       }
     }
 
