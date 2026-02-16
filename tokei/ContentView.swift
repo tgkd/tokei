@@ -11,66 +11,64 @@ import WidgetKit
 struct ContentView: View {
   @State private var timeZones: [TimeZoneInfo] = []
   @State private var currentTime = Date()
+  @State private var showTimeZoneList = false
 
   let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
   var body: some View {
-    NavigationView {
-      GeometryReader { _ in
-        ZStack(alignment: .bottom) {
-          EarthGlobeView(timeZones: timeZones)
-            .ignoresSafeArea()
+    GeometryReader { _ in
+      ZStack(alignment: .bottom) {
+        EarthGlobeView(timeZones: timeZones)
+          .ignoresSafeArea()
 
-          VStack(spacing: 16) {
-            HStack {
-              VStack(alignment: .leading, spacing: 4) {
-                Text("Current Time")
-                  .font(.caption)
-                  .foregroundColor(.secondary)
+        VStack(spacing: 16) {
+          HStack {
+            VStack(alignment: .leading, spacing: 4) {
+              Text("Current Time")
+                .font(.caption)
+                .foregroundColor(.gray)
 
-                Text(currentTime, style: .time)
-                  .font(.system(size: 32, weight: .bold, design: .monospaced))
-                  .foregroundColor(.primary)
-              }
-
-              Spacer()
-
-              VStack(alignment: .trailing, spacing: 4) {
-                Text("Time Zones")
-                  .font(.caption)
-                  .foregroundColor(.secondary)
-
-                Text("\(timeZones.count)")
-                  .font(.system(size: 32, weight: .bold))
-                  .foregroundColor(.blue)
-              }
+              Text(currentTime, style: .time)
+                .font(.system(size: 32, weight: .bold, design: .monospaced))
+                .foregroundColor(.black)
             }
-            .padding(.horizontal, 20)
+
+            Spacer()
+
+            VStack(alignment: .trailing, spacing: 4) {
+              Text("Time Zones")
+                .font(.caption)
+                .foregroundColor(.gray)
+
+              Text("\(timeZones.count)")
+                .font(.system(size: 32, weight: .bold))
+                .foregroundColor(.blue)
+            }
           }
-          .padding(.vertical, 24)
-          .frame(maxWidth: .infinity)
-          .background(.ultraThinMaterial)
-          .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
-          .padding(.horizontal, 24)
-          .padding(.bottom, 24)
+          .padding(.horizontal, 20)
         }
-      }
-      .onReceive(timer) { _ in
-        currentTime = Date()
-      }
-      .onAppear {
-        loadTimeZones()
-      }
-      .toolbar {
-        ToolbarItem(placement: .navigationBarTrailing) {
-          NavigationLink(destination: TimeZoneListView(timeZones: $timeZones)) {
-            Image(systemName: "list.bullet")
-              .font(.system(size: 18, weight: .medium))
-          }
+        .padding(.vertical, 24)
+        .frame(maxWidth: .infinity)
+        .background(.white)
+        .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
+        .padding(.horizontal, 24)
+        .padding(.bottom, 24)
+        .onTapGesture {
+          showTimeZoneList = true
         }
       }
     }
-    .navigationViewStyle(StackNavigationViewStyle())
+    .onReceive(timer) { _ in
+      currentTime = Date()
+    }
+    .onAppear {
+      loadTimeZones()
+    }
+    .sheet(isPresented: $showTimeZoneList) {
+      NavigationView {
+        TimeZoneListView(timeZones: $timeZones)
+      }
+    }
   }
 
   private func loadTimeZones() {

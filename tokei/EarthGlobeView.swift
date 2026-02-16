@@ -250,7 +250,7 @@ struct EarthGlobeView: View {
     var angleX: Float = 0
 
     if let localCoord = TimeZoneCoordinates.coordinate(for: TimeZone.current.identifier) {
-      let lonRad = Float((localCoord.longitude + 180) * .pi / 180.0)
+      let lonRad = Float(localCoord.longitude * .pi / 180.0)
       angleX = lonRad + earthNode.eulerAngles.y
     }
 
@@ -258,7 +258,7 @@ struct EarthGlobeView: View {
     let y = distance * sin(angleY)
     let z = distance * cos(angleX) * cos(angleY)
     cameraNode.position = SCNVector3(x, y, z)
-    cameraNode.look(at: SCNVector3Zero)
+    cameraNode.look(at: SCNVector3Zero, up: SCNVector3(0, 1, 0), localFront: SCNVector3(0, 0, -1))
   }
 
   // MARK: - Markers
@@ -426,7 +426,7 @@ struct EarthGlobeView: View {
 
   private func latLonToPosition(lat: Double, lon: Double, radiusOffset: Double) -> SCNVector3 {
     let latRad = lat * Double.pi / 180.0
-    let lonRad = (lon + 180) * Double.pi / 180.0
+    let lonRad = lon * Double.pi / 180.0
 
     let radius = Double(earthRadius) * radiusOffset
     let x = Float(radius * cos(latRad) * sin(lonRad))
@@ -534,7 +534,7 @@ private struct OrbitingSceneView: UIViewRepresentable {
       let y = cameraDistance * sin(cameraAngleY)
       let z = cameraDistance * cos(cameraAngleX) * cos(cameraAngleY)
       cameraNode.position = SCNVector3(x, y, z)
-      cameraNode.look(at: SCNVector3Zero)
+      cameraNode.look(at: SCNVector3Zero, up: SCNVector3(0, 1, 0), localFront: SCNVector3(0, 0, -1))
     }
 
     @objc func handlePan(_ gesture: UIPanGestureRecognizer) {
@@ -573,7 +573,7 @@ private struct OrbitingSceneView: UIViewRepresentable {
       var targetAngleX: Float = 0
       if let localCoord = TimeZoneCoordinates.coordinate(for: TimeZone.current.identifier),
          let earthNode {
-        let lonRad = Float((localCoord.longitude + 180) * .pi / 180.0)
+        let lonRad = Float(localCoord.longitude * .pi / 180.0)
         targetAngleX = lonRad + earthNode.eulerAngles.y
       }
 
@@ -589,7 +589,7 @@ private struct OrbitingSceneView: UIViewRepresentable {
       let y = cameraDistance * sin(cameraAngleY)
       let z = cameraDistance * cos(cameraAngleX) * cos(cameraAngleY)
       cameraNode.position = SCNVector3(x, y, z)
-      cameraNode.look(at: SCNVector3Zero)
+      cameraNode.look(at: SCNVector3Zero, up: SCNVector3(0, 1, 0), localFront: SCNVector3(0, 0, -1))
 
       SCNTransaction.commit()
     }
