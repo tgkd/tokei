@@ -60,8 +60,8 @@ struct EarthGlobeView: View {
               .font(.system(size: 15, weight: .medium))
               .foregroundStyle(.white)
               .frame(width: 40, height: 40)
-              .background(.ultraThinMaterial, in: Circle())
           }
+          .glassEffect(.regular, in: .circle)
           .padding(.trailing, 20)
           .padding(.top, 60)
         }

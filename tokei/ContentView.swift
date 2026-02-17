@@ -30,7 +30,7 @@ struct ContentView: View {
 
               Text(currentTime, style: .time)
                 .font(.system(size: 32, weight: .bold, design: .monospaced))
-                .foregroundColor(.black)
+                .foregroundColor(.white)
             }
 
             Spacer()
@@ -42,17 +42,16 @@ struct ContentView: View {
 
               Text("\(timeZones.count)")
                 .font(.system(size: 32, weight: .bold))
-                .foregroundColor(.blue)
+                .foregroundColor(.white)
             }
           }
           .padding(.horizontal, 20)
         }
         .padding(.vertical, 24)
         .frame(maxWidth: .infinity)
-        .background(.white)
-        .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
         .padding(.horizontal, 24)
         .padding(.bottom, 24)
+        .glassEffect(.regular, in: .rect(cornerRadius: 28, style: .continuous))
         .onTapGesture {
           showTimeZoneList = true
         }
@@ -64,6 +63,7 @@ struct ContentView: View {
     .onAppear {
       loadTimeZones()
     }
+    .preferredColorScheme(.dark)
     .sheet(isPresented: $showTimeZoneList) {
       NavigationView {
         TimeZoneListView(timeZones: $timeZones)
