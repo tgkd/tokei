@@ -20,23 +20,7 @@ struct CityMarker: Identifiable {
   var name: String { info.cityName }
 
   var color: UIColor {
-    switch info.dayDifference {
-    case let diff where diff > 0:
-      return UIColor(red: 0.75, green: 0.48, blue: 0.22, alpha: 1.0)
-    case let diff where diff < 0:
-      return UIColor(red: 0.32, green: 0.48, blue: 0.68, alpha: 1.0)
-    default:
-      return timeDifferenceHours == 0
-        ? UIColor(red: 0.35, green: 0.58, blue: 0.38, alpha: 1.0)
-        : UIColor(red: 0.72, green: 0.62, blue: 0.28, alpha: 1.0)
-    }
-  }
-
-  private var timeDifferenceHours: Int {
-    let adjustedDate = info.currentTime
-    let localOffset = TimeZone.current.secondsFromGMT(for: adjustedDate)
-    let targetOffset = info.timeZone.secondsFromGMT(for: adjustedDate)
-    return (targetOffset - localOffset) / 3600
+    UIColor(white: 0.85, alpha: 1.0)
   }
 }
 
@@ -50,15 +34,39 @@ struct EarthGlobeView: View {
   @State private var sunNode: SCNNode?
   @State private var rotationTimer: Timer?
   @State private var userDefaultsObserver: NSObjectProtocol?
+  @State private var cameraResetTrigger = false
   private let earthRadius: CGFloat = 0.8
 
   var body: some View {
     ZStack {
       Color.black.ignoresSafeArea()
 
-      OrbitingSceneView(scene: scene, cameraNode: cameraNode, earthNode: earthNode)
+      OrbitingSceneView(
+        scene: scene,
+        cameraNode: cameraNode,
+        earthNode: earthNode,
+        cameraResetTrigger: cameraResetTrigger
+      )
       .frame(maxWidth: .infinity, maxHeight: .infinity)
       .background(Color.black)
+
+      VStack {
+        HStack {
+          Spacer()
+          Button {
+            cameraResetTrigger.toggle()
+          } label: {
+            Image(systemName: "location.fill")
+              .font(.system(size: 15, weight: .medium))
+              .foregroundStyle(.white)
+              .frame(width: 40, height: 40)
+              .background(.ultraThinMaterial, in: Circle())
+          }
+          .padding(.trailing, 20)
+          .padding(.top, 60)
+        }
+        Spacer()
+      }
     }
     .onAppear {
       setupEarthScene()
@@ -79,7 +87,7 @@ struct EarthGlobeView: View {
     if scene != nil { return }
 
     let scene = SCNScene()
-    scene.background.contents = UIColor(red: 0.01, green: 0.01, blue: 0.02, alpha: 1.0)
+    scene.background.contents = Self.makeStarfieldImage(size: CGSize(width: 2048, height: 2048))
     scene.fogColor = UIColor.black
     scene.fogStartDistance = 14
     scene.fogEndDistance = 28
@@ -465,6 +473,26 @@ struct EarthGlobeView: View {
     return SCNVector3(x, y, z)
   }
 
+  private static func makeStarfieldImage(size: CGSize) -> UIImage {
+    let renderer = UIGraphicsImageRenderer(size: size)
+    return renderer.image { context in
+      let ctx = context.cgContext
+      ctx.setFillColor(UIColor(red: 0.01, green: 0.01, blue: 0.02, alpha: 1.0).cgColor)
+      ctx.fill(CGRect(origin: .zero, size: size))
+
+      var rng = SystemRandomNumberGenerator()
+      let starCount = 600
+      for _ in 0..<starCount {
+        let x = CGFloat.random(in: 0..<size.width, using: &rng)
+        let y = CGFloat.random(in: 0..<size.height, using: &rng)
+        let brightness = CGFloat.random(in: 0.3...1.0, using: &rng)
+        let radius = CGFloat.random(in: 0.4...1.2, using: &rng)
+        ctx.setFillColor(UIColor(white: brightness, alpha: brightness).cgColor)
+        ctx.fillEllipse(in: CGRect(x: x - radius, y: y - radius, width: radius * 2, height: radius * 2))
+      }
+    }
+  }
+
   private static func makeRadialGradientImage(
     size: CGSize,
     centerColor: UIColor,
@@ -504,6 +532,7 @@ private struct OrbitingSceneView: UIViewRepresentable {
   var scene: SCNScene?
   var cameraNode: SCNNode?
   var earthNode: SCNNode?
+  var cameraResetTrigger: Bool
 
   func makeUIView(context: Context) -> SCNView {
     let view = SCNView()
@@ -517,10 +546,6 @@ private struct OrbitingSceneView: UIViewRepresentable {
 
     let pinch = UIPinchGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.handlePinch(_:)))
     view.addGestureRecognizer(pinch)
-
-    let doubleTap = UITapGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.handleDoubleTap(_:)))
-    doubleTap.numberOfTapsRequired = 2
-    view.addGestureRecognizer(doubleTap)
 
     let singleTap = UITapGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.handleTap(_:)))
     singleTap.numberOfTapsRequired = 1
@@ -536,6 +561,11 @@ private struct OrbitingSceneView: UIViewRepresentable {
     uiView.pointOfView = cameraNode
     context.coordinator.cameraNode = cameraNode
     context.coordinator.earthNode = earthNode
+
+    if cameraResetTrigger != context.coordinator.lastResetTrigger {
+      context.coordinator.lastResetTrigger = cameraResetTrigger
+      context.coordinator.resetCamera()
+    }
   }
 
   func makeCoordinator() -> Coordinator {
@@ -555,6 +585,7 @@ private struct OrbitingSceneView: UIViewRepresentable {
     private let maxDistance: Float = defaultDistance
     private let maxVerticalAngle: Float = 1.2
     private var selectedMarkerName: String?
+    var lastResetTrigger = false
 
     private var inertiaTimer: CADisplayLink?
     private var velocityX: Float = 0
@@ -692,7 +723,7 @@ private struct OrbitingSceneView: UIViewRepresentable {
       }
     }
 
-    @objc func handleDoubleTap(_ gesture: UITapGestureRecognizer) {
+    func resetCamera() {
       guard let cameraNode else { return }
       stopInertia()
 
