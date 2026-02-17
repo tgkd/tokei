@@ -302,66 +302,81 @@ struct EarthGlobeView: View {
     material.lightingModel = .physicallyBased
     markerGeometry.materials = [material]
 
-    let scaleUp = SCNAction.scale(to: 1.2, duration: 1.1)
-    let scaleDown = SCNAction.scale(to: 1.0, duration: 1.1)
-    let pulse = SCNAction.sequence([scaleUp, scaleDown])
-    markerNode.runAction(.repeatForever(pulse))
-
     markerNode.addChildNode(createMarkerGlowNode(color: marker.color))
 
-    let hitGeometry = SCNSphere(radius: 0.04)
-    hitGeometry.segmentCount = 8
-    let hitMaterial = SCNMaterial()
-    hitMaterial.diffuse.contents = UIColor.clear
-    hitMaterial.transparency = 0.001
-    hitGeometry.materials = [hitMaterial]
-    let hitNode = SCNNode(geometry: hitGeometry)
-    hitNode.name = "hitTarget"
-    markerNode.addChildNode(hitNode)
+    let containerNode = SCNNode()
+    containerNode.name = "markerText"
+    containerNode.position = SCNVector3(0, 0.04, 0)
+    containerNode.scale = SCNVector3(0.015, 0.015, 0.015)
+    containerNode.renderingOrder = 100
+    containerNode.isHidden = true
 
-    let cityLine = marker.name.uppercased()
-    let timeLine = "\(marker.info.formattedTime) \(marker.info.shortCityName) \(marker.info.timeOffset)"
-    let textGeometry = SCNText(string: "\(cityLine)\n\(timeLine)", extrusionDepth: 0.0)
-    textGeometry.font = UIFont.systemFont(ofSize: 0.08, weight: .bold)
-    textGeometry.firstMaterial?.diffuse.contents = UIColor(white: 0.95, alpha: 1.0)
-    textGeometry.firstMaterial?.emission.contents = UIColor(white: 1.0, alpha: 1.0)
-    textGeometry.firstMaterial?.emission.intensity = 0.9
-    textGeometry.firstMaterial?.writesToDepthBuffer = false
-    textGeometry.flatness = 0.08
+    let cityLine = marker.name
+    let cityGeometry = SCNText(string: cityLine, extrusionDepth: 0.0)
+    cityGeometry.font = UIFont.systemFont(ofSize: 3.0, weight: .semibold)
+    cityGeometry.firstMaterial?.diffuse.contents = UIColor(white: 0.15, alpha: 1.0)
+    cityGeometry.firstMaterial?.emission.contents = UIColor(white: 0.15, alpha: 1.0)
+    cityGeometry.firstMaterial?.emission.intensity = 0.5
+    cityGeometry.firstMaterial?.writesToDepthBuffer = false
+    cityGeometry.firstMaterial?.readsFromDepthBuffer = false
+    cityGeometry.flatness = 0.2
+    let cityNode = SCNNode(geometry: cityGeometry)
+    cityNode.renderingOrder = 102
 
-    let textNode = SCNNode(geometry: textGeometry)
-    textNode.name = "markerText"
-    textNode.position = SCNVector3(0, 0.028, 0)
-    textNode.scale = SCNVector3(0.004, 0.004, 0.004)
-    textNode.renderingOrder = 50
-    textNode.isHidden = true
+    let timeLine = "\(marker.info.formattedTime)  \(marker.info.timeOffset)"
+    let timeGeometry = SCNText(string: timeLine, extrusionDepth: 0.0)
+    timeGeometry.font = UIFont.monospacedDigitSystemFont(ofSize: 2.2, weight: .medium)
+    timeGeometry.firstMaterial?.diffuse.contents = UIColor(white: 0.35, alpha: 1.0)
+    timeGeometry.firstMaterial?.emission.contents = UIColor(white: 0.35, alpha: 1.0)
+    timeGeometry.firstMaterial?.emission.intensity = 0.4
+    timeGeometry.firstMaterial?.writesToDepthBuffer = false
+    timeGeometry.firstMaterial?.readsFromDepthBuffer = false
+    timeGeometry.flatness = 0.2
+    let timeNode = SCNNode(geometry: timeGeometry)
+    timeNode.position = SCNVector3(0, -3.2, 0)
+    timeNode.renderingOrder = 102
 
-    let bounds = textGeometry.boundingBox
-    let textCenterX = (bounds.min.x + bounds.max.x) / 2
-    let textCenterY = (bounds.min.y + bounds.max.y) / 2
-    textNode.pivot = SCNMatrix4MakeTranslation(textCenterX, textCenterY, 0)
+    let cityBounds = cityGeometry.boundingBox
+    let timeBounds = timeGeometry.boundingBox
+    let contentWidth = max(
+      CGFloat(cityBounds.max.x - cityBounds.min.x),
+      CGFloat(timeBounds.max.x - timeBounds.min.x)
+    )
+    let contentTop = CGFloat(cityBounds.max.y)
+    let contentBottom = CGFloat(timeBounds.min.y) - 3.2
 
-    let bgPadding: Float = 0.06
-    let bgWidth = CGFloat(bounds.max.x - bounds.min.x + bgPadding * 2)
-    let bgHeight = CGFloat(bounds.max.y - bounds.min.y + bgPadding * 2)
+    let padH: Float = 1.5
+    let padV: Float = 1.2
+    let bgWidth = contentWidth + CGFloat(padH * 2)
+    let bgHeight = CGFloat(contentTop - contentBottom) + CGFloat(padV * 2)
     let bgPlane = SCNPlane(width: bgWidth, height: bgHeight)
     let bgMaterial = SCNMaterial()
-    bgMaterial.diffuse.contents = UIColor(white: 0.0, alpha: 0.55)
-    bgMaterial.emission.contents = UIColor(white: 0.0, alpha: 0.55)
+    bgMaterial.diffuse.contents = UIColor(white: 1.0, alpha: 0.95)
+    bgMaterial.emission.contents = UIColor(white: 0.95, alpha: 0.95)
     bgMaterial.isDoubleSided = true
     bgMaterial.writesToDepthBuffer = false
+    bgMaterial.readsFromDepthBuffer = false
     bgPlane.materials = [bgMaterial]
-    bgPlane.cornerRadius = CGFloat(bgPadding * 0.5)
+    bgPlane.cornerRadius = 1.5
     let bgNode = SCNNode(geometry: bgPlane)
-    bgNode.position = SCNVector3(textCenterX, textCenterY, -0.01)
-    bgNode.renderingOrder = 49
-    textNode.addChildNode(bgNode)
+    let bgCenterX = Float(contentWidth) / 2
+    let bgCenterY = Float(contentTop + contentBottom) / 2
+    bgNode.position = SCNVector3(bgCenterX, bgCenterY, -0.01)
+    bgNode.renderingOrder = 101
+
+    containerNode.addChildNode(bgNode)
+    containerNode.addChildNode(cityNode)
+    containerNode.addChildNode(timeNode)
+
+    let centerX = Float(contentWidth) / 2
+    let centerY = Float(contentTop + contentBottom) / 2
+    containerNode.pivot = SCNMatrix4MakeTranslation(centerX, centerY, 0)
 
     let billboardConstraint = SCNBillboardConstraint()
     billboardConstraint.freeAxes = .all
-    textNode.constraints = [billboardConstraint]
+    containerNode.constraints = [billboardConstraint]
 
-    markerNode.addChildNode(textNode)
+    markerNode.addChildNode(containerNode)
 
     return markerNode
   }
@@ -509,7 +524,6 @@ private struct OrbitingSceneView: UIViewRepresentable {
 
     let singleTap = UITapGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.handleTap(_:)))
     singleTap.numberOfTapsRequired = 1
-    singleTap.require(toFail: doubleTap)
     view.addGestureRecognizer(singleTap)
 
     return view
@@ -542,6 +556,12 @@ private struct OrbitingSceneView: UIViewRepresentable {
     private let maxVerticalAngle: Float = 1.2
     private var selectedMarkerName: String?
 
+    private var inertiaTimer: CADisplayLink?
+    private var velocityX: Float = 0
+    private var velocityY: Float = 0
+    private let friction: Float = 0.92
+    private let minVelocity: Float = 0.0001
+
     init(cameraNode: SCNNode?, earthNode: SCNNode?) {
       self.cameraNode = cameraNode
       self.earthNode = earthNode
@@ -557,11 +577,45 @@ private struct OrbitingSceneView: UIViewRepresentable {
       cameraNode.look(at: SCNVector3Zero, up: SCNVector3(0, 1, 0), localFront: SCNVector3(0, 0, -1))
     }
 
+    private func applyCameraAnimated(duration: TimeInterval = 0.3) {
+      guard let cameraNode else { return }
+      SCNTransaction.begin()
+      SCNTransaction.animationDuration = duration
+      SCNTransaction.animationTimingFunction = CAMediaTimingFunction(name: .easeOut)
+      let x = cameraDistance * sin(cameraAngleX) * cos(cameraAngleY)
+      let y = cameraDistance * sin(cameraAngleY)
+      let z = cameraDistance * cos(cameraAngleX) * cos(cameraAngleY)
+      cameraNode.position = SCNVector3(x, y, z)
+      cameraNode.look(at: SCNVector3Zero, up: SCNVector3(0, 1, 0), localFront: SCNVector3(0, 0, -1))
+      SCNTransaction.commit()
+    }
+
+    private func stopInertia() {
+      inertiaTimer?.invalidate()
+      inertiaTimer = nil
+    }
+
+    @objc private func inertiaStep() {
+      velocityX *= friction
+      velocityY *= friction
+
+      if abs(velocityX) < minVelocity && abs(velocityY) < minVelocity {
+        stopInertia()
+        return
+      }
+
+      cameraAngleX -= velocityX
+      cameraAngleY += velocityY
+      cameraAngleY = max(-maxVerticalAngle, min(maxVerticalAngle, cameraAngleY))
+      applyCamera()
+    }
+
     @objc func handlePan(_ gesture: UIPanGestureRecognizer) {
       guard cameraNode != nil else { return }
       let translation = gesture.translation(in: gesture.view)
 
       if gesture.state == .began {
+        stopInertia()
         lastPanPoint = .zero
       }
 
@@ -572,40 +626,58 @@ private struct OrbitingSceneView: UIViewRepresentable {
       cameraAngleX -= dx
       cameraAngleY += dy
       cameraAngleY = max(-maxVerticalAngle, min(maxVerticalAngle, cameraAngleY))
-
       applyCamera()
+
+      if gesture.state == .ended {
+        let v = gesture.velocity(in: gesture.view)
+        velocityX = Float(v.x) * 0.00004
+        velocityY = Float(v.y) * 0.00004
+
+        if abs(velocityX) > minVelocity || abs(velocityY) > minVelocity {
+          let link = CADisplayLink(target: self, selector: #selector(inertiaStep))
+          link.add(to: .main, forMode: .common)
+          inertiaTimer = link
+        }
+      }
     }
 
     @objc func handlePinch(_ gesture: UIPinchGestureRecognizer) {
       guard cameraNode != nil else { return }
 
       if gesture.state == .changed {
+        stopInertia()
         cameraDistance /= Float(gesture.scale)
         cameraDistance = max(minDistance, min(maxDistance, cameraDistance))
         gesture.scale = 1.0
         applyCamera()
       }
+
+      if gesture.state == .ended {
+        cameraDistance = max(minDistance, min(maxDistance, cameraDistance))
+        applyCameraAnimated(duration: 0.35)
+      }
     }
 
     @objc func handleTap(_ gesture: UITapGestureRecognizer) {
-      guard let scnView = gesture.view as? SCNView, let earthNode else { return }
+      guard let scnView = gesture.view as? SCNView, let earthNode, let cameraNode else { return }
       let location = gesture.location(in: scnView)
-      let hitResults = scnView.hitTest(location, options: [
-        .searchMode: SCNHitTestSearchMode.all.rawValue,
-        .boundingBoxOnly: true as NSNumber
-      ])
 
+      let camPos = cameraNode.presentation.worldPosition
       var tappedMarkerNode: SCNNode?
-      for result in hitResults {
-        var node: SCNNode? = result.node
-        while let current = node {
-          if let name = current.name, name.hasPrefix("marker-") {
-            tappedMarkerNode = current
-            break
-          }
-          node = current.parent
+      var minDist: CGFloat = 44
+
+      for child in earthNode.childNodes where child.name?.hasPrefix("marker-") == true {
+        let markerPos = child.presentation.worldPosition
+        let dot = camPos.x * markerPos.x + camPos.y * markerPos.y + camPos.z * markerPos.z
+        if dot <= 0 { continue }
+
+        let projected = scnView.projectPoint(markerPos)
+        let screenPt = CGPoint(x: CGFloat(projected.x), y: CGFloat(projected.y))
+        let dist = hypot(location.x - screenPt.x, location.y - screenPt.y)
+        if dist < minDist {
+          minDist = dist
+          tappedMarkerNode = child
         }
-        if tappedMarkerNode != nil { break }
       }
 
       for child in earthNode.childNodes where child.name?.hasPrefix("marker-") == true {
@@ -622,6 +694,7 @@ private struct OrbitingSceneView: UIViewRepresentable {
 
     @objc func handleDoubleTap(_ gesture: UITapGestureRecognizer) {
       guard let cameraNode else { return }
+      stopInertia()
 
       var targetAngleX: Float = 0
       if let localCoord = TimeZoneCoordinates.coordinate(for: TimeZone.current.identifier),
@@ -630,13 +703,15 @@ private struct OrbitingSceneView: UIViewRepresentable {
         targetAngleX = lonRad + earthNode.eulerAngles.y
       }
 
-      SCNTransaction.begin()
-      SCNTransaction.animationDuration = 0.5
-      SCNTransaction.animationTimingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
-
       cameraAngleX = targetAngleX
       cameraAngleY = 0.15
       cameraDistance = Self.defaultDistance
+
+      SCNTransaction.begin()
+      SCNTransaction.animationDuration = 0.8
+      SCNTransaction.animationTimingFunction = CAMediaTimingFunction(
+        controlPoints: 0.25, 1.0, 0.25, 1.0
+      )
 
       let x = cameraDistance * sin(cameraAngleX) * cos(cameraAngleY)
       let y = cameraDistance * sin(cameraAngleY)
