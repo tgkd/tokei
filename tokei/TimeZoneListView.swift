@@ -6,11 +6,6 @@ struct TimeZoneListView: View {
     @State private var showingAddTimeZone = false
     @State private var newCityName = ""
     @State private var newTimeZoneIdentifier = ""
-    @State private var timeOffsetMinutes: Double = 0
-    @State private var isEditingSlider = false
-    @State private var showSlider = false
-    @State private var showSliderContent = false
-
     var body: some View {
         NavigationView {
             ZStack {
@@ -72,84 +67,7 @@ struct TimeZoneListView: View {
                 VStack {
                     Spacer()
                     HStack {
-                        HStack(spacing: 0) {
-                            Button(action: {
-                                if showSlider {
-                                    withAnimation(.easeInOut(duration: 0.1)) {
-                                        showSliderContent = false
-                                    }
-                                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                                        withAnimation(.easeInOut(duration: 0.08)) {
-                                            showSlider = false
-                                        }
-                                    }
-                                } else {
-                                    withAnimation(.easeInOut(duration: 0.08)) {
-                                        showSlider = true
-                                    }
-                                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) {
-                                        withAnimation(.easeInOut(duration: 0.12)) {
-                                            showSliderContent = true
-                                        }
-                                    }
-                                }
-                            }) {
-                                if showSlider {
-                                    Text(timeOffsetText)
-                                        .font(.system(size: 14, weight: .medium, design: .monospaced))
-                                        .foregroundColor(.primary)
-                                        .frame(width: 80, height: 44)
-                                } else {
-                                    Image(systemName: "clock")
-                                        .font(.system(size: 20, weight: .medium))
-                                        .foregroundColor(.primary)
-                                        .frame(width: 50, height: 44)
-                                }
-                            }
-                            .buttonStyle(PlainButtonStyle())
-
-                            if showSlider {
-                                HStack(spacing: 8) {
-                                    if showSliderContent {
-                                        Slider(
-                                            value: $timeOffsetMinutes, in: -1440...1440, step: 15,
-                                            onEditingChanged: { editing in
-                                                isEditingSlider = editing
-                                            }
-                                        )
-                                        .onChange(of: timeOffsetMinutes) {
-                                            updateTimeOffset(minutes: Int(timeOffsetMinutes))
-                                        }
-                                        .frame(minWidth: 120)
-                                        .transition(.opacity.combined(with: .scale(scale: 0.8, anchor: .leading)))
-
-                                        Button(action: {
-                                            resetTimeOffset()
-                                        }) {
-                                            Image(systemName: "xmark.circle.fill")
-                                                .font(.system(size: 18))
-                                                .foregroundColor(.secondary)
-                                                .opacity(timeOffsetMinutes == 0 ? 0.5 : 1.0)
-                                        }
-                                        .buttonStyle(PlainButtonStyle())
-                                        .disabled(timeOffsetMinutes == 0)
-                                        .transition(.opacity.combined(with: .scale(scale: 0.8, anchor: .trailing)))
-                                    }
-                                }
-                                .padding(.trailing, 12)
-                                .transition(
-                                    .asymmetric(
-                                        insertion: .move(edge: .leading).combined(with: .opacity),
-                                        removal: .move(edge: .leading).combined(with: .opacity)
-                                    ))
-                            }
-                        }
-                        .padding(.horizontal, showSlider ? 8 : 12)
-                        .padding(.vertical, 8)
-                        .background(.thickMaterial, in: showSlider ? AnyShape(RoundedRectangle(cornerRadius: 42)) : AnyShape(Circle()))
-                        .shadow(color: .black.opacity(0.1), radius: 8, x: 0, y: 2)
-
-                        Spacer(minLength: 24)
+                        Spacer()
 
                         if !timeZones.isEmpty {
                             Button(action: {
@@ -169,9 +87,6 @@ struct TimeZoneListView: View {
                 }
             }
             .navigationTitle("Time Zones")
-            .onAppear {
-                loadTimeOffset()
-            }
         }
         .sheet(isPresented: $showingAddTimeZone) {
             AddTimeZoneView(
@@ -186,28 +101,6 @@ struct TimeZoneListView: View {
                 }
             )
         }
-    }
-
-    var timeOffsetText: String {
-        let hours = abs(Int(timeOffsetMinutes)) / 60
-        let minutes = abs(Int(timeOffsetMinutes)) % 60
-        let sign = timeOffsetMinutes >= 0 ? "+" : "-"
-
-        return String(format: "%@%02d:%02d", sign, hours, minutes)
-    }
-
-    private func loadTimeOffset() {
-        timeOffsetMinutes = Double(UserDefaults.shared.integer(forKey: "time_offset_minutes"))
-    }
-
-    private func updateTimeOffset(minutes: Int) {
-        UserDefaults.shared.set(minutes, forKey: "time_offset_minutes")
-        updateWidget()
-    }
-
-    private func resetTimeOffset() {
-        timeOffsetMinutes = 0
-        updateTimeOffset(minutes: 0)
     }
 
     private func addTimeZone(city: String, identifier: String) {

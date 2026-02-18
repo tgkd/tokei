@@ -27,6 +27,7 @@ struct CityMarker: Identifiable {
 // MARK: - Main Globe View
 struct EarthGlobeView: View {
   let timeZones: [TimeZoneInfo]
+  @Binding var cameraResetTrigger: Bool
 
   @State private var scene: SCNScene?
   @State private var cameraNode: SCNNode?
@@ -34,7 +35,6 @@ struct EarthGlobeView: View {
   @State private var sunNode: SCNNode?
   @State private var rotationTimer: Timer?
   @State private var userDefaultsObserver: NSObjectProtocol?
-  @State private var cameraResetTrigger = false
   private let earthRadius: CGFloat = 0.8
 
   var body: some View {
@@ -49,24 +49,6 @@ struct EarthGlobeView: View {
       )
       .frame(maxWidth: .infinity, maxHeight: .infinity)
       .background(Color.black)
-
-      VStack {
-        HStack {
-          Spacer()
-          Button {
-            cameraResetTrigger.toggle()
-          } label: {
-            Image(systemName: "location.fill")
-              .font(.system(size: 15, weight: .medium))
-              .foregroundStyle(.white)
-              .frame(width: 40, height: 40)
-          }
-          .glassEffect(.regular, in: .circle)
-          .padding(.trailing, 20)
-          .padding(.top, 60)
-        }
-        Spacer()
-      }
     }
     .onAppear {
       setupEarthScene()
@@ -179,12 +161,9 @@ struct EarthGlobeView: View {
 
     earthNode.removeAction(forKey: "earthRotation")
 
-    let offsetMinutes = UserDefaults.shared.integer(forKey: "time_offset_minutes")
-    let adjustedDate = Date().addingTimeInterval(TimeInterval(offsetMinutes * 60))
-
     var calendar = Calendar(identifier: .gregorian)
     calendar.timeZone = TimeZone(secondsFromGMT: 0)!
-    let components = calendar.dateComponents([.hour, .minute, .second], from: adjustedDate)
+    let components = calendar.dateComponents([.hour, .minute, .second], from: Date())
     let hours = Double(components.hour ?? 0) * 3600.0
     let minutes = Double(components.minute ?? 0) * 60.0
     let seconds = Double(components.second ?? 0)
@@ -218,11 +197,15 @@ struct EarthGlobeView: View {
     let declination = -23.44 * cos((360.0 / 365.0) * (Double(dayOfYear) + 10) * Double.pi / 180.0)
     let declinationRad = declination * Double.pi / 180.0
 
-    let distance: Double = 10.0
-    let z = Float(distance * cos(declinationRad))
-    let y = Float(distance * sin(declinationRad))
+    let sunAngle = Double(offsetMinutes) / 1440.0 * 2.0 * Double.pi
 
-    sunNode.position = SCNVector3(0, y, z)
+    let distance: Double = 10.0
+    let baseZ = distance * cos(declinationRad)
+    let y = Float(distance * sin(declinationRad))
+    let x = Float(baseZ * sin(sunAngle))
+    let z = Float(baseZ * cos(sunAngle))
+
+    sunNode.position = SCNVector3(x, y, z)
     sunNode.look(at: SCNVector3Zero)
   }
 
@@ -758,6 +741,6 @@ private struct OrbitingSceneView: UIViewRepresentable {
 
 // MARK: - Preview
 #Preview {
-  EarthGlobeView(timeZones: Array(TimeZoneInfo.defaultTimeZones.prefix(3)))
+  EarthGlobeView(timeZones: Array(TimeZoneInfo.defaultTimeZones.prefix(3)), cameraResetTrigger: .constant(false))
     .ignoresSafeArea()
 }
