@@ -23,17 +23,31 @@ struct TimeZoneInfo: Identifiable, Codable, Transferable, Equatable {
         TimeZoneCoordinates.coordinate(for: timeZoneIdentifier)
     }
     
+    private static let abbreviationFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "zzz"
+        return f
+    }()
+
+    private static let shortTimeFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.timeStyle = .short
+        return f
+    }()
+
+    private static let dateDayMonthFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "dd.MM"
+        return f
+    }()
+
     var shortCityName: String {
-        let formatter = DateFormatter()
-        formatter.timeZone = timeZone
-        formatter.dateFormat = "zzz"
-        let abbreviation = formatter.string(from: Date())
-        
-        // If we get a timezone abbreviation, use it, otherwise fallback to first 3 chars of city name
+        Self.abbreviationFormatter.timeZone = timeZone
+        let abbreviation = Self.abbreviationFormatter.string(from: Date())
+
         if abbreviation.count <= 4 && !abbreviation.contains("GMT") {
             return abbreviation
         } else {
-            // Fallback: create abbreviation from city name
             return String(cityName.prefix(3).uppercased())
         }
     }
@@ -45,10 +59,8 @@ struct TimeZoneInfo: Identifiable, Codable, Transferable, Equatable {
     }
     
     var formattedTime: String {
-        let formatter = DateFormatter()
-        formatter.timeZone = timeZone
-        formatter.timeStyle = .short
-        return formatter.string(from: currentTime)
+        Self.shortTimeFormatter.timeZone = timeZone
+        return Self.shortTimeFormatter.string(from: currentTime)
     }
     
     var timeOffsetDisplay: String {
@@ -160,19 +172,14 @@ struct TimeZoneInfo: Identifiable, Codable, Transferable, Equatable {
     }
     
     var formattedDate: String {
-        let formatter = DateFormatter()
-        formatter.timeZone = timeZone
-        formatter.dateFormat = "dd.MM"
-        return formatter.string(from: currentTime)
+        Self.dateDayMonthFormatter.timeZone = timeZone
+        return Self.dateDayMonthFormatter.string(from: currentTime)
     }
-    
+
     var formattedDateForDifference: String {
         guard dayDifference != 0 else { return "" }
-        
-        let formatter = DateFormatter()
-        formatter.timeZone = timeZone
-        formatter.dateFormat = "dd.MM"
-        return "(\(formatter.string(from: currentTime)))"
+        Self.dateDayMonthFormatter.timeZone = timeZone
+        return "(\(Self.dateDayMonthFormatter.string(from: currentTime)))"
     }
     
     static var transferRepresentation: some TransferRepresentation {
@@ -243,14 +250,13 @@ extension TimeZoneInfo {
         TimeZoneInfo(cityName: "Tokyo", timeZoneIdentifier: "Asia/Tokyo"),
     ]
     
-    static var allAvailableTimeZones: [SearchableTimeZone] {
-        return TimeZone.knownTimeZoneIdentifiers
+    static let allAvailableTimeZones: [SearchableTimeZone] =
+        TimeZone.knownTimeZoneIdentifiers
             .sorted()
             .compactMap { identifier in
                 guard !identifier.hasPrefix("GMT") else { return nil }
                 return SearchableTimeZone(timeZoneIdentifier: identifier)
             }
-    }
     
     var dayShiftText: String {
         let currentDate = Date()

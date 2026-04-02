@@ -13,6 +13,7 @@ struct ContentView: View {
   @State private var showTimeZoneList = false
   @State private var timeOffsetMinutes: Double = 0
   @State private var cameraResetTrigger = false
+  @State private var sunUpdateTrigger = false
 
   var timeOffsetText: String {
     let hours = abs(Int(timeOffsetMinutes)) / 60
@@ -24,7 +25,7 @@ struct ContentView: View {
   var body: some View {
     GeometryReader { _ in
       ZStack {
-        EarthGlobeView(timeZones: timeZones, cameraResetTrigger: $cameraResetTrigger)
+        EarthGlobeView(timeZones: timeZones, cameraResetTrigger: $cameraResetTrigger, sunUpdateTrigger: $sunUpdateTrigger)
           .ignoresSafeArea()
 
         VStack {
@@ -104,6 +105,7 @@ struct ContentView: View {
 
   private func updateTimeOffset(minutes: Int) {
     UserDefaults.shared.set(minutes, forKey: "time_offset_minutes")
+    sunUpdateTrigger.toggle()
     WidgetCenter.shared.reloadTimelines(ofKind: "TokeiWidget")
   }
 
