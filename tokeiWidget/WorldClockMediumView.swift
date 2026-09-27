@@ -10,6 +10,7 @@ struct WorldClockMediumView: View {
             labelInsets: EdgeInsets(top: 7, leading: 7, bottom: 7, trailing: 7),
             reservedCorner: CGSize(width: 136, height: 42)
         )
+        .invalidatableContent()
         .overlay(alignment: .bottomTrailing) {
             ShiftControls(shiftMinutes: entry.shiftMinutes)
                 .padding(8)

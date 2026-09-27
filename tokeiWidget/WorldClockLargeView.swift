@@ -8,10 +8,12 @@ struct WorldClockLargeView: View {
         VStack(spacing: 0) {
             DayNightMapView(entry: entry)
                 .frame(height: 160)
+                .invalidatableContent()
             VStack(spacing: 0) {
                 ForEach(entry.zones.prefix(4)) { zone in
                     Link(destination: URL(string: "tokei://zone/\(zone.id.uuidString)")!) {
                         row(zone)
+                            .invalidatableContent()
                     }
                     if zone.id != entry.zones.prefix(4).last?.id {
                         Rectangle()
@@ -24,6 +26,7 @@ struct WorldClockLargeView: View {
                     Text(ZoneClock.weekdayAndDate(entry.displayDate, in: .current))
                         .font(.system(size: 11, weight: .medium))
                         .foregroundStyle(.white.opacity(0.5))
+                        .invalidatableContent()
                     Spacer()
                     ShiftControls(shiftMinutes: entry.shiftMinutes)
                 }
