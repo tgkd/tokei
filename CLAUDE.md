@@ -4,44 +4,31 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Overview
 
-Tokei is a SwiftUI iOS world clock app featuring an interactive 3D Earth globe (RealityKit) with city markers and a WidgetKit extension offering multiple widget styles. Users add/remove time zones, view them on the globe, and use a time-offset slider to preview different times. Requires iOS 17+.
+Tokei is a SwiftUI world clock. Saved time zones are markers on a photo-real 3D globe with a live day/night terminator, city lights and an atmosphere; a time tape shifts the displayed moment. A WidgetKit extension shows the same cities, the same shift and a day/night map. The deployment target in the project file is recent enough that Liquid Glass and other current SwiftUI APIs are used without availability checks.
 
-## Build Commands
+## Build
 
-Xcode-only project. No SPM, CocoaPods, or other package managers.
+- Xcode project only, no package managers. Scheme `tokei` builds the app and embeds `tokeiWidgetExtension`.
+- CLI: `xcodebuild -project tokei.xcodeproj -scheme tokei -destination 'platform=iOS Simulator,name=<device>' build`.
+- No test target. Verify in the simulator; widgets are added from the home-screen widget gallery.
 
-- **Build/Run/Test in Xcode:** Cmd+B / Cmd+R / Cmd+U
-- **CLI build:** `xcodebuild -scheme tokei -destination 'platform=iOS Simulator,name=iPhone 16' build`
-- **Widget scheme:** `tokeiWidgetExtension` (requires same app-group entitlements)
-- **No automated tests.** Use SwiftUI previews and simulator runs. Debug widget timelines via `WidgetCenter.shared.reloadAllTimelines()` or `RefreshTimeZonesIntent`.
-- After changing entitlements (`tokei.entitlements`, `tokeiWidgetExtension.entitlements`), clean the build folder to refresh provisioning.
+## Layout
 
-## Architecture
+- `Shared/` is a file-system-synchronized folder attached to both targets: the `Zone` model, App Group persistence (`ZoneStorage`), time formatting (`ZoneClock`), sun ephemeris (`SolarPosition`), label collision placement (`LabelPlacer`) and the palette. Anything the widget needs lives here.
+- `tokei/Globe/` renders the globe as one full-screen Metal fragment shader (`Globe.metal`) that ray-traces an analytic sphere. There are no meshes and no RealityKit.
+- `tokei/Clock/` holds the stores, the time tape and scrubber panel, the city list and the city picker.
+- `tokeiWidget/` holds the timeline provider, the intents and the widget views.
 
-### Main App (`tokei/`)
+## Rules that are easy to break
 
-- **tokeiApp.swift** — App entry point. Handles `tokei://` deep links and triggers widget reloads.
-- **ContentView.swift** — Root view: full-screen 3D globe with floating glass-effect buttons (location reset, clock list) and a time-offset slider at the bottom. Opens `TimeZoneListView` as a sheet. Defines `UserDefaults.shared` (suite: `group.tokei.widget`).
-- **EarthGlobeView.swift** — RealityKit-based 3D globe (`RealityView` + `GlobeController`). Uses a custom Metal shader (`EarthDayNight.metal`) via `CustomMaterial` for day/night rendering with PBR fallback. Sun position derived from UTC time + Earth's axial tilt. Earth Y-axis rotation synced to current time (plus offset). City markers at lat/lon with billboard text cards (tap to reveal). Camera orbiting via pan/pinch gestures with inertia.
-- **EarthDayNight.metal** — Metal surface shader blending day texture (base_color) and night texture (emissive_color) based on sun direction passed via `custom_parameter`.
-- **TimeZoneModels.swift** — `TimeZoneInfo` (Codable, Transferable, Identifiable) is the core data model. `SearchableTimeZone` for search UI. All time formatting, offset calculation, and day-difference logic lives here—extend these computed props rather than duplicating date logic.
-- **TimeZoneCoordinates.swift** — Static lat/lon lookup for all IANA timezone identifiers plus legacy aliases.
-- **TimeZoneListView.swift** — List of saved time zones with drag-to-reorder, swipe-to-delete, and add-timezone sheet.
-
-### Widget Extension (`tokeiWidget/`)
-
-Three widget styles registered in `tokeiWidgetBundle.swift`, all sharing the same `Provider`:
-- **TokeiWidget** — Standard world clock (small/medium/large)
-- **TokeiCompactWidget** — Compact horizontal layout (small/medium)
-- **TokeiMinimalWidget** — Single/dual timezone focus (small/medium)
-
-Widget views in `TokeiWidgetEntryView.swift`. Provider (`TokeiWidgetProvider.swift`) generates 60 minute-by-minute timeline entries. Widget buttons use AppIntents (`TokeiAppIntents.swift`) for time adjustment. When adjusting widget layouts, update small/medium/large variants together to avoid layout drift.
-
-### Shared State
-
-App and widget share data via **App Group** `group.tokei.widget`:
-- `UserDefaults.shared` (suite: `group.tokei.widget`) — defined in `ContentView.swift`, also used in `TokeiWidgetProvider.swift`
-- Key `saved_timezones`: JSON-encoded `[TimeZoneInfo]`
-- Key `time_offset_minutes`: `Int` for time travel offset
-
-**Important:** Every state mutation that should surface in widgets must call `WidgetCenter.shared.reloadTimelines(ofKind: ...)`. Reuse existing AppIntents in `TokeiAppIntents.swift` for widget buttons or Siri shortcuts rather than creating new persistence paths.
+- One displayed time: `now + shift`. The sun, marker chips, list rows and widget entries all derive from that single date. Never call `Date()` inside formatting helpers or views.
+- The globe is Earth-fixed: the camera orbits a still Earth and the sun direction moves with time. The latitude/longitude ↔ vector convention is duplicated in the shader (`atan2`/`asin`) and in `GeoPoint.unitVector`; change both or neither.
+- `GlobeFrame` is the immutable per-frame snapshot used both for shader uniforms and for projecting SwiftUI marker chips. Chips must stay unanimated in position, or they drift off their cities.
+- `GlobeLayerView` draws on demand in `layoutSubviews` and presents with the Core Animation transaction, so a SwiftUI update and its Metal frame land together. Continuous motion (inertia, fly-to, shift glide) is a pure function of time inside `TimelineView(.animation)`; `.task(id:)` settles it. Nothing renders while idle except the minute tick.
+- The atmosphere is single scattering with a precomputed transmittance LUT that includes the planet shadow. Twilight warmth, moonlight and the reduced haze over the night side are deliberate art terms, not physics. The shader encodes sRGB itself into a non-sRGB drawable after tone mapping; do not add a second gamma.
+- Globe textures are bundle resources in `tokei/Resources` (NASA Blue Marble / Black Marble plus a water mask) uploaded with mipmaps; the widget has its own small map images in its asset catalog.
+- The stored JSON shape of `Zone` must stay decodable; suite name and keys live in `ZoneStorage`. The shift is a persisted relative offset shared with widgets.
+- Every persisted mutation calls `WidgetCenter.shared.reloadAllTimelines()`. Scrubbing persists only when the glide settles, not per drag sample.
+- Widget kind identifiers (in `TokeiWidgets.swift`) are placed on users' home screens: never rename or remove them. Intent type names are referenced by the system too.
+- Widget timelines are minute-aligned and self-contained. The night mask is computed on the CPU per entry (`NightMask`); the extension does no GPU work.
+- `tokei://zone/<uuid>` opens the app focused on that city (used by widget rows).
