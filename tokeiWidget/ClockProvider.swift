@@ -6,15 +6,17 @@ struct ClockProvider: TimelineProvider {
     let includesMap: Bool
 
     func placeholder(in context: Context) -> ClockEntry {
-        makeEntry(at: Date(), zones: Zone.defaults, shift: 0, family: context.family)
+        makeEntry(at: Date(), zones: Zone.defaults, shift: 0, homeZone: .current, family: context.family)
     }
 
     func getSnapshot(in context: Context, completion: @escaping (ClockEntry) -> Void) {
-        completion(makeEntry(at: Date(), zones: loadZones(), shift: ZoneStorage.loadShift(), family: context.family))
+        let homeZone = ZoneStorage.loadHomeZone()
+        completion(makeEntry(at: Date(), zones: loadZones(homeZone: homeZone), shift: ZoneStorage.loadShift(), homeZone: homeZone, family: context.family))
     }
 
     func getTimeline(in context: Context, completion: @escaping (Timeline<ClockEntry>) -> Void) {
-        let zones = loadZones()
+        let homeZone = ZoneStorage.loadHomeZone()
+        let zones = loadZones(homeZone: homeZone)
         let shift = ZoneStorage.loadShift()
         let now = Date().timeIntervalSince1970
         let start = Date(timeIntervalSince1970: (now / 60).rounded(.down) * 60)
@@ -23,24 +25,25 @@ struct ClockProvider: TimelineProvider {
                 at: start.addingTimeInterval(TimeInterval(index * 60)),
                 zones: zones,
                 shift: shift,
+                homeZone: homeZone,
                 family: context.family
             )
         }
         completion(Timeline(entries: entries, policy: .atEnd))
     }
 
-    private func makeEntry(at date: Date, zones: [Zone], shift: Int, family: WidgetFamily) -> ClockEntry {
+    private func makeEntry(at date: Date, zones: [Zone], shift: Int, homeZone: TimeZone, family: WidgetFamily) -> ClockEntry {
         var mask: CGImage?
         if includesMap && (family == .systemMedium || family == .systemLarge) {
             let displayDate = date.addingTimeInterval(TimeInterval(shift * 60))
-            mask = MaskCache.shared.mask(for: displayDate, centerLongitude: ClockEntry.mapCenterLongitude)
+            mask = MaskCache.shared.mask(for: displayDate, centerLongitude: ClockEntry.mapCenterLongitude(for: homeZone))
         }
-        return ClockEntry(date: date, zones: zones, shiftMinutes: shift, nightMask: mask)
+        return ClockEntry(date: date, zones: zones, shiftMinutes: shift, homeZone: homeZone, nightMask: mask)
     }
 
-    private func loadZones() -> [Zone] {
+    private func loadZones(homeZone: TimeZone) -> [Zone] {
         let zones = ZoneStorage.loadZones()
-        return zones.isEmpty ? [Zone.local] : zones
+        return zones.isEmpty ? [Zone.home(for: homeZone)] : zones
     }
 }
 

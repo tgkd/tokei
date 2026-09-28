@@ -5,8 +5,11 @@ struct ZonePicker: View {
     @Environment(\.sceneAccent) private var accent
     @Environment(\.sceneStyle) private var style
 
+    var title = "Add City"
     let date: Date
-    let existing: Set<String>
+    var existing: Set<String> = []
+    var selection: String?
+    var onFollowDevice: (() -> Void)?
     let onPick: (String) -> Void
 
     @State private var query = ""
@@ -33,27 +36,42 @@ struct ZonePicker: View {
     var body: some View {
         let interface = style.interface
         NavigationStack {
-            List(results, id: \.self) { identifier in
-                let added = existing.contains(identifier)
-                Button {
-                    onPick(identifier)
-                    dismiss()
-                } label: {
-                    row(identifier, added: added, interface: interface)
+            List {
+                if let onFollowDevice, query.isEmpty {
+                    Button {
+                        onFollowDevice()
+                        dismiss()
+                    } label: {
+                        deviceRow(interface: interface)
+                    }
+                    .buttonStyle(.plain)
+                    .listRowBackground(Color.clear)
+                    .listRowSeparatorTint(interface.ink.opacity(0.12))
+                    .accessibilityAddTraits(selection == nil ? .isSelected : [])
                 }
-                .buttonStyle(.plain)
-                .disabled(added)
-                .listRowBackground(Color.clear)
-                .listRowSeparatorTint(interface.ink.opacity(0.12))
+                ForEach(results, id: \.self) { identifier in
+                    let added = existing.contains(identifier)
+                    Button {
+                        onPick(identifier)
+                        dismiss()
+                    } label: {
+                        row(identifier, added: added, interface: interface)
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(added)
+                    .listRowBackground(Color.clear)
+                    .listRowSeparatorTint(interface.ink.opacity(0.12))
+                    .accessibilityAddTraits(identifier == selection ? .isSelected : [])
+                }
             }
             .listStyle(.plain)
             .scrollContentBackground(.hidden)
             .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: "City, region or GMT offset")
-            .navigationTitle("Add City")
+            .navigationTitle(title)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .principal) {
-                    Text("Add City")
+                    Text(title)
                         .font(interface.typography.title(.headline))
                         .foregroundStyle(interface.ink)
                         .accessibilityAddTraits(.isHeader)
@@ -74,10 +92,21 @@ struct ZonePicker: View {
         let zone = TimeZone(identifier: identifier) ?? .current
         let region = Zone.regionName(for: identifier)
         let detail = [region, ZoneClock.gmtLabel(of: zone, at: date)].filter { !$0.isEmpty }.joined(separator: " · ")
+        return rowLabel(Zone.cityName(for: identifier), detail: detail, zone: zone, isChecked: added || identifier == selection, interface: interface)
+            .opacity(added ? 0.6 : 1)
+    }
+
+    private func deviceRow(interface: InterfaceLook) -> some View {
+        let zone = TimeZone.current
+        let detail = "\(Zone.cityName(for: zone.identifier)) · \(ZoneClock.gmtLabel(of: zone, at: date))"
+        return rowLabel("Follow Device", detail: detail, zone: zone, isChecked: selection == nil, interface: interface)
+    }
+
+    private func rowLabel(_ title: String, detail: String, zone: TimeZone, isChecked: Bool, interface: InterfaceLook) -> some View {
         let typography = interface.typography
         return HStack(spacing: 12) {
             VStack(alignment: .leading, spacing: 2) {
-                Text(Zone.cityName(for: identifier))
+                Text(title)
                     .font(typography.title(.body))
                     .foregroundStyle(interface.ink)
                 Text(detail)
@@ -87,7 +116,7 @@ struct ZonePicker: View {
                     .foregroundStyle(interface.secondaryInk)
             }
             Spacer(minLength: 8)
-            if added {
+            if isChecked {
                 Image(systemName: "checkmark")
                     .font(.body.weight(.semibold))
                     .foregroundStyle(accent)
@@ -103,6 +132,5 @@ struct ZonePicker: View {
         }
         .padding(.vertical, 2)
         .contentShape(Rectangle())
-        .opacity(added ? 0.6 : 1)
     }
 }

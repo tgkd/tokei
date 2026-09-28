@@ -7,6 +7,7 @@ struct TimeTape: View {
 
     let now: Date
     let shift: Double
+    let homeZone: TimeZone
 
     @State private var scrubOrigin: Double?
 
@@ -36,7 +37,7 @@ struct TimeTape: View {
         .onChange(of: hourIndex) { old, new in
             guard scene.isScrubbing || scene.shiftGlide != nil else { return }
             let boundary = Date(timeIntervalSince1970: Double(max(old, new)) * 3600)
-            let local = Calendar.current.dateComponents([.hour, .minute], from: boundary)
+            let local = Calendar.current.dateComponents(in: homeZone, from: boundary)
             scene.emit(local.hour == 0 && local.minute == 0 ? .dayTick : .tick)
         }
         .accessibilityElement()
@@ -70,7 +71,7 @@ struct TimeTape: View {
     }
 
     private func drawTicks(in context: GraphicsContext, size: CGSize, tape: TapeLook) {
-        let zone = TimeZone.current
+        let format = Date.FormatStyle(timeZone: homeZone)
         let center = size.width / 2
         let needle = displayDate.timeIntervalSince1970
         let span = Double(center / Self.pointsPerMinute) * 60 + 1800
@@ -83,7 +84,7 @@ struct TimeTape: View {
             let fade = max(0, min(1, (center - abs(x - center)) / 44))
             if fade > 0 {
                 let date = Date(timeIntervalSince1970: tick)
-                let local = Int(tick) + zone.secondsFromGMT(for: date)
+                let local = Int(tick) + homeZone.secondsFromGMT(for: date)
                 let minuteOfDay = ((local % 86_400) + 86_400) % 86_400 / 60
                 let isHour = minuteOfDay % 60 == 0
                 let isMidnight = minuteOfDay == 0
@@ -97,8 +98,8 @@ struct TimeTape: View {
                 context.stroke(path, with: .color(color.opacity(opacity)), style: StrokeStyle(lineWidth: isHour ? tape.hourWidth : tape.quarterWidth, lineCap: cap))
                 if isHour {
                     let label = isMidnight
-                        ? date.formatted(.dateTime.weekday(.abbreviated))
-                        : date.formatted(.dateTime.hour(.defaultDigits(amPM: .abbreviated)))
+                        ? date.formatted(format.weekday(.abbreviated))
+                        : date.formatted(format.hour(.defaultDigits(amPM: .abbreviated)))
                     let clearance = min(1, max(0, (abs(x - center) - 10) / 14))
                     let text = Text(label)
                         .font(.system(size: 11, weight: isMidnight ? .bold : tape.labelWeight, design: tape.labelDesign))

@@ -9,9 +9,11 @@ struct ZoneListSheet: View {
     let isShifted: Bool
 
     @State private var showsPicker = false
+    @State private var showsHomePicker = false
 
     var body: some View {
         let interface = style.interface
+        let homeZone = store.homeZone
         NavigationStack {
             Group {
                 if store.zones.isEmpty {
@@ -32,25 +34,36 @@ struct ZoneListSheet: View {
                         .tint(accent)
                         .foregroundStyle(interface.onAccent)
                     }
+                    .safeAreaInset(edge: .top) {
+                        homeButton
+                            .padding(.horizontal, 20)
+                    }
                 } else {
                     List {
-                        ForEach(store.zones) { zone in
-                            let isSelected = zone.id == store.selection
-                            Button {
-                                store.focus(on: zone)
-                            } label: {
-                                ZoneRow(zone: zone, date: date, isShifted: isShifted, isSelected: isSelected)
+                        Section {
+                            homeButton
+                                .listRowBackground(Color.clear)
+                                .listRowSeparatorTint(interface.ink.opacity(0.12))
+                        }
+                        Section {
+                            ForEach(store.zones) { zone in
+                                let isSelected = zone.id == store.selection
+                                Button {
+                                    store.focus(on: zone)
+                                } label: {
+                                    ZoneRow(zone: zone, date: date, homeZone: homeZone, isShifted: isShifted, isSelected: isSelected)
+                                }
+                                .buttonStyle(.plain)
+                                .listRowBackground(isSelected ? interface.ink.opacity(0.07) : Color.clear)
+                                .listRowSeparatorTint(interface.ink.opacity(0.12))
+                                .accessibilityAddTraits(isSelected ? .isSelected : [])
                             }
-                            .buttonStyle(.plain)
-                            .listRowBackground(isSelected ? interface.ink.opacity(0.07) : Color.clear)
-                            .listRowSeparatorTint(interface.ink.opacity(0.12))
-                            .accessibilityAddTraits(isSelected ? .isSelected : [])
-                        }
-                        .onDelete { offsets in
-                            store.remove(atOffsets: offsets)
-                        }
-                        .onMove { source, destination in
-                            store.move(fromOffsets: source, toOffset: destination)
+                            .onDelete { offsets in
+                                store.remove(atOffsets: offsets)
+                            }
+                            .onMove { source, destination in
+                                store.move(fromOffsets: source, toOffset: destination)
+                            }
                         }
                     }
                     .listStyle(.plain)
@@ -87,8 +100,27 @@ struct ZoneListSheet: View {
                     store.add(identifier: identifier)
                 }
             }
+            .sheet(isPresented: $showsHomePicker) {
+                ZonePicker(
+                    title: "My Time Zone",
+                    date: date,
+                    selection: store.homeZoneIdentifier,
+                    onFollowDevice: { store.setHomeZone(identifier: nil) }
+                ) { identifier in
+                    store.setHomeZone(identifier: identifier)
+                }
+            }
         }
         .tint(accent)
         .modifier(SheetBackground(color: interface.sheet))
+    }
+
+    private var homeButton: some View {
+        Button {
+            showsHomePicker = true
+        } label: {
+            HomeZoneRow(zone: store.homeZone, followsDevice: store.homeZoneIdentifier == nil)
+        }
+        .buttonStyle(.plain)
     }
 }

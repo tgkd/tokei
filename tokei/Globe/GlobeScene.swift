@@ -15,10 +15,17 @@ struct GlobeScene: View {
     @State private var dragRadius: Double = 1
     @State private var pinchOrigin: Double?
 
+    private static let refillInterval = 1.0 / 30
+
+    private var schedule: AnimationTimelineSchedule {
+        let cadence = scene.cameraMotion == nil && scene.shiftGlide == nil ? scene.effects.cadence : .moving
+        return .animation(minimumInterval: cadence == .refilling ? Self.refillInterval : nil, paused: cadence == .still)
+    }
+
     var body: some View {
         GeometryReader { proxy in
             let size = proxy.size
-            TimelineView(.animation(minimumInterval: nil, paused: scene.cameraMotion == nil && scene.effects.isEmpty)) { context in
+            TimelineView(schedule) { context in
                 let frame = GlobeFrame(
                     camera: scene.camera(at: context.date),
                     size: size,
@@ -30,6 +37,7 @@ struct GlobeScene: View {
                     zones: store.zones,
                     frame: frame,
                     date: date,
+                    homeZone: store.homeZone,
                     selection: store.selection,
                     bounds: focusRect.insetBy(dx: 8, dy: 4),
                     surface: frame.style.mesh.flatMap { scene.renderer?.toyMesh?.shapes[$0.shape]?.surface },
@@ -70,7 +78,7 @@ struct GlobeScene: View {
             guard !Task.isCancelled else { return }
             scene.settle(motion)
         }
-        .task(id: scene.effects) {
+        .task(id: scene.effects.nextEnd(tuning: scene.style.effects)) {
             guard let end = scene.effects.nextEnd(tuning: scene.style.effects) else { return }
             let wait = end.timeIntervalSinceNow
             if wait > 0 {

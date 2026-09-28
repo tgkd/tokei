@@ -30,12 +30,11 @@ struct Zone: Identifiable, Codable, Hashable {
         return parts.dropLast().joined(separator: " · ").replacingOccurrences(of: "_", with: " ")
     }
 
-    static var local: Zone {
-        let identifier = TimeZone.current.identifier
-        return Zone(
+    static func home(for timeZone: TimeZone) -> Zone {
+        Zone(
             id: UUID(uuidString: "5E1F0000-0000-4000-8000-000000000000")!,
-            cityName: cityName(for: identifier),
-            timeZoneIdentifier: identifier
+            cityName: cityName(for: timeZone.identifier),
+            timeZoneIdentifier: timeZone.identifier
         )
     }
 

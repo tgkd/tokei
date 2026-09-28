@@ -4,10 +4,11 @@ import WidgetKit
 
 struct ShiftControls: View {
     let shiftMinutes: Int
+    var stepMinutes = 60
 
     var body: some View {
         HStack(spacing: 4) {
-            Button(intent: AdjustTimeIntent(minutes: -60)) {
+            Button(intent: AdjustTimeIntent(minutes: -stepMinutes)) {
                 Image(systemName: "minus")
                     .frame(width: 30, height: 26)
             }
@@ -18,7 +19,7 @@ struct ShiftControls: View {
                     .padding(.horizontal, 6)
                     .frame(minWidth: 44, minHeight: 26)
             }
-            Button(intent: AdjustTimeIntent(minutes: 60)) {
+            Button(intent: AdjustTimeIntent(minutes: stepMinutes)) {
                 Image(systemName: "plus")
                     .frame(width: 30, height: 26)
             }

@@ -64,7 +64,6 @@
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "999EBD582E70301200E84297"
             BuildableName = "tokeiWidgetExtension.appex"
-            BlueprintName = "tokeiWidgetExtension"
             ReferencedContainer = "container:tokei.xcodeproj">
          </BuildableReference>
       </RemoteRunnable>

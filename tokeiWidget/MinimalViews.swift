@@ -33,7 +33,7 @@ struct MinimalSmallView: View {
     let entry: ClockEntry
 
     var body: some View {
-        let zone = entry.zones.first ?? Zone.local
+        let zone = entry.zones.first ?? Zone.home(for: entry.homeZone)
         MinimalZoneView(zone: zone, entry: entry)
             .overlay(alignment: .topTrailing) {
                 if entry.isShifted {

@@ -23,7 +23,7 @@ struct WorldClockLargeView: View {
                 }
                 Spacer(minLength: 0)
                 HStack {
-                    Text(ZoneClock.weekdayAndDate(entry.displayDate, in: .current))
+                    Text(ZoneClock.weekdayAndDate(entry.displayDate, in: entry.homeZone))
                         .font(.system(size: 11, weight: .medium))
                         .foregroundStyle(.white.opacity(0.5))
                         .invalidatableContent()
@@ -38,10 +38,9 @@ struct WorldClockLargeView: View {
     }
 
     private func row(_ zone: Zone) -> some View {
-        let local = TimeZone.current
         let date = entry.displayDate
-        let offset = ZoneClock.offsetMinutes(of: zone.timeZone, from: local, at: date)
-        let day = ZoneClock.dayDeltaLabel(ZoneClock.dayDelta(of: zone.timeZone, from: local, at: date))
+        let offset = ZoneClock.offsetMinutes(of: zone.timeZone, from: entry.homeZone, at: date)
+        let day = ZoneClock.dayDeltaLabel(ZoneClock.dayDelta(of: zone.timeZone, from: entry.homeZone, at: date))
         let detail = [day, ZoneClock.offsetLabel(minutes: offset)].compactMap { $0 }.joined(separator: " · ")
         return HStack(alignment: .center) {
             VStack(alignment: .leading, spacing: 1) {

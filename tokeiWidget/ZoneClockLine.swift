@@ -4,11 +4,12 @@ import WidgetKit
 struct ZoneClockLine: View {
     let zone: Zone
     let date: Date
+    let homeZone: TimeZone
     let isShifted: Bool
     var timeSize: CGFloat = 20
 
     var body: some View {
-        let delta = ZoneClock.dayDelta(of: zone.timeZone, from: .current, at: date)
+        let delta = ZoneClock.dayDelta(of: zone.timeZone, from: homeZone, at: date)
         VStack(alignment: .leading, spacing: 0) {
             Text(zone.cityName)
                 .font(.system(size: 11, weight: .semibold))

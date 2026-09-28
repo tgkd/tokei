@@ -30,6 +30,7 @@ struct CompactClockWidget: Widget {
         .configurationDisplayName("Compact World Clock")
         .description("Several cities at a glance.")
         .supportedFamilies([.systemSmall, .systemMedium])
+        .contentMarginsDisabled()
     }
 }
 
@@ -79,6 +80,7 @@ struct WorldClockEntryView: View {
 
 struct CompactEntryView: View {
     @Environment(\.widgetFamily) private var family
+    @Environment(\.widgetContentMargins) private var margins
 
     let entry: ClockEntry
 
@@ -88,6 +90,7 @@ struct CompactEntryView: View {
                 CompactMediumView(entry: entry)
             } else {
                 CompactSmallView(entry: entry)
+                    .padding(margins)
             }
         }
         .containerBackground(for: .widget) {

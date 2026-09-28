@@ -29,7 +29,7 @@ struct AccessoryInlineView: View {
         if let zone = entry.zones.first {
             Text("\(zone.cityName) \(ZoneClock.time(entry.displayDate, in: zone.timeZone))")
         } else {
-            Text(ZoneClock.time(entry.displayDate, in: .current))
+            Text(ZoneClock.time(entry.displayDate, in: entry.homeZone))
         }
     }
 }
@@ -38,7 +38,7 @@ struct AccessoryCircularView: View {
     let entry: ClockEntry
 
     var body: some View {
-        let zone = entry.zones.first ?? Zone.local
+        let zone = entry.zones.first ?? Zone.home(for: entry.homeZone)
         ZStack {
             AccessoryWidgetBackground()
             VStack(spacing: 0) {

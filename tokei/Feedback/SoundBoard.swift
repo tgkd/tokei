@@ -9,18 +9,17 @@ final class SoundBoard {
         let time: TimeInterval
     }
 
-    private let engine = AVAudioEngine()
-    private let format = AVAudioFormat(standardFormatWithSampleRate: 44_100, channels: 1)
-    private var voices: [AVAudioPlayerNode] = []
-    private var busyUntil: [TimeInterval] = []
+    private let output = SoundOutput()
+    private var busyUntil = [TimeInterval](repeating: 0, count: SoundOutput.voiceCount)
     private var sounds: [SoundTimbre: [FeedbackCue.Kind: [AVAudioPCMBuffer]]] = [:]
     private var rendering: Set<SoundTimbre> = []
     private var waiting: Request?
     private var lastPlayed: [FeedbackCue.Kind: (variant: Int, time: TimeInterval)] = [:]
     private var wantsRunning = false
+    private var pendingPause: Task<Void, Never>?
 
-    private static let voiceCount = 8
     private static let waitLimit: TimeInterval = 0.3
+    private static let idleDelay: TimeInterval = 10
     private static let spacing: [FeedbackCue.Kind: TimeInterval] = [.tick: 0.03, .carve: 0.03]
 
     init() {
@@ -33,7 +32,8 @@ final class SoundBoard {
             if let timbre {
                 prepare(timbre)
             }
-            start()
+            output.start()
+            schedulePause()
         } else {
             stop()
         }
@@ -41,9 +41,6 @@ final class SoundBoard {
 
     func play(_ kind: FeedbackCue.Kind, timbre: SoundTimbre, volume: Float = 1) {
         guard wantsRunning else { return }
-        if !engine.isRunning {
-            start()
-        }
         let now = ProcessInfo.processInfo.systemUptime
         guard let library = sounds[timbre] else {
             waiting = Request(kind: kind, timbre: timbre, volume: volume, time: now)
@@ -54,50 +51,33 @@ final class SoundBoard {
             return
         }
         guard
-            engine.isRunning,
             let buffers = library[kind],
             !buffers.isEmpty,
-            let slot = voices.indices.min(by: { busyUntil[$0] < busyUntil[$1] })
+            let slot = busyUntil.indices.min(by: { busyUntil[$0] < busyUntil[$1] })
         else { return }
         var variant = Int.random(in: 0..<buffers.count)
         if buffers.count > 1, variant == lastPlayed[kind]?.variant {
             variant = (variant + Int.random(in: 1..<buffers.count)) % buffers.count
         }
         let buffer = buffers[variant]
-        let voice = voices[slot]
-        voice.volume = volume
-        voice.scheduleBuffer(buffer, at: nil, options: .interrupts)
-        if !voice.isPlaying {
-            voice.play()
-        }
+        output.play(buffer, voice: slot, volume: volume)
         busyUntil[slot] = now + Double(buffer.frameLength) / buffer.format.sampleRate
         lastPlayed[kind] = (variant, now)
+        schedulePause()
     }
 
-    private func start() {
-        guard let format, !engine.isRunning else { return }
-        if voices.isEmpty {
-            for _ in 0..<Self.voiceCount {
-                let voice = AVAudioPlayerNode()
-                engine.attach(voice)
-                engine.connect(voice, to: engine.mainMixerNode, format: format)
-                voices.append(voice)
-                busyUntil.append(0)
-            }
-        }
-        do {
-            let session = AVAudioSession.sharedInstance()
-            try session.setCategory(.ambient)
-            try session.setActive(true)
-            try engine.start()
-            voices.forEach { $0.play() }
-        } catch {
-            engine.stop()
+    private func schedulePause() {
+        pendingPause?.cancel()
+        let quiet = max(busyUntil.max() ?? 0, ProcessInfo.processInfo.systemUptime) + Self.idleDelay
+        pendingPause = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(max(quiet - ProcessInfo.processInfo.systemUptime, 0)))
+            guard !Task.isCancelled else { return }
+            self?.output.pause()
         }
     }
 
     private func prepare(_ timbre: SoundTimbre) {
-        guard sounds[timbre] == nil, !rendering.contains(timbre), let rate = format?.sampleRate else { return }
+        guard sounds[timbre] == nil, !rendering.contains(timbre), let rate = output.format?.sampleRate else { return }
         rendering.insert(timbre)
         Task {
             let samples = await Task.detached(priority: .userInitiated) {
@@ -109,7 +89,7 @@ final class SoundBoard {
 
     private func install(_ samples: [FeedbackCue.Kind: [[Float]]], for timbre: SoundTimbre) {
         rendering.remove(timbre)
-        guard let format else { return }
+        guard let format = output.format else { return }
         sounds[timbre] = samples.mapValues { variants in
             variants.compactMap { SoundSynth.buffer($0, format: format) }
         }
@@ -121,9 +101,8 @@ final class SoundBoard {
     }
 
     private func stop() {
-        guard engine.isRunning else { return }
-        voices.forEach { $0.stop() }
+        pendingPause?.cancel()
         busyUntil = busyUntil.map { _ in 0 }
-        engine.stop()
+        output.stop()
     }
 }

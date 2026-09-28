@@ -8,6 +8,7 @@ struct ScrubberPanel: View {
 
     let now: Date
     let shift: Double
+    let homeZone: TimeZone
 
     private var minutes: Int {
         Int(shift.rounded())
@@ -17,15 +18,14 @@ struct ScrubberPanel: View {
         let interface = style.interface
         let typography = interface.typography
         let date = now.addingTimeInterval(shift * 60)
-        let zone = TimeZone.current
         VStack(spacing: 10) {
             HStack(alignment: .center, spacing: 12) {
                 VStack(alignment: .leading, spacing: 2) {
-                    DisplayTime(date: date, zone: zone, font: typography.display(size: timeSize), periodFont: typography.period(size: timeSize * 0.5))
+                    DisplayTime(date: date, zone: homeZone, font: typography.display(size: timeSize), periodFont: typography.period(size: timeSize * 0.5))
                         .foregroundStyle(minutes == 0 ? interface.ink : accent)
                         .lineLimit(1)
                         .minimumScaleFactor(0.6)
-                    Text("\(ZoneClock.weekdayAndDate(date, in: zone)) · \(Zone.cityName(for: zone.identifier))")
+                    Text("\(ZoneClock.weekdayAndDate(date, in: homeZone)) · \(Zone.cityName(for: homeZone.identifier))")
                         .font(typography.caption(.footnote))
                         .textCase(typography.captionCase)
                         .tracking(typography.captionTracking)
@@ -36,7 +36,7 @@ struct ScrubberPanel: View {
                 Spacer(minLength: 8)
                 trailing(interface)
             }
-            TimeTape(now: now, shift: shift)
+            TimeTape(now: now, shift: shift, homeZone: homeZone)
                 .frame(height: 46)
         }
         .padding(.horizontal, 18)

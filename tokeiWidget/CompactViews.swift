@@ -33,26 +33,34 @@ struct CompactSmallView: View {
 }
 
 struct CompactMediumView: View {
+    @Environment(\.widgetContentMargins) private var margins
+
     let entry: ClockEntry
 
     var body: some View {
-        HStack(spacing: 0) {
-            ForEach(Array(entry.zones.prefix(4).enumerated()), id: \.element.id) { index, zone in
-                if index > 0 {
-                    Rectangle()
-                        .fill(.white.opacity(0.08))
-                        .frame(width: 0.5)
-                        .padding(.vertical, 10)
+        VStack(spacing: 8) {
+            HStack(spacing: 0) {
+                ForEach(Array(entry.zones.prefix(4).enumerated()), id: \.element.id) { index, zone in
+                    if index > 0 {
+                        Rectangle()
+                            .fill(.white.opacity(0.08))
+                            .frame(width: 0.5)
+                            .padding(.vertical, 10)
+                    }
+                    column(zone)
+                        .invalidatableContent()
+                        .frame(maxWidth: .infinity)
                 }
-                column(zone)
-                    .frame(maxWidth: .infinity)
             }
+            .padding(EdgeInsets(top: margins.top, leading: margins.leading, bottom: 0, trailing: margins.trailing))
+            ShiftControls(shiftMinutes: entry.shiftMinutes, stepMinutes: 30)
+                .padding(.bottom, 8)
         }
     }
 
     private func column(_ zone: Zone) -> some View {
         let date = entry.displayDate
-        let offset = ZoneClock.offsetMinutes(of: zone.timeZone, from: .current, at: date)
+        let offset = ZoneClock.offsetMinutes(of: zone.timeZone, from: entry.homeZone, at: date)
         let sun = SolarPosition(date: date)
         let daylight = zone.location.map { ZoneClock.daylight(at: $0, sun: sun) } ?? .day
         return VStack(spacing: 6) {

@@ -8,15 +8,15 @@ struct ZoneRow: View {
 
     let zone: Zone
     let date: Date
+    let homeZone: TimeZone
     let isShifted: Bool
     let isSelected: Bool
 
     var body: some View {
         let interface = style.interface
         let typography = interface.typography
-        let local = TimeZone.current
-        let offset = ZoneClock.offsetMinutes(of: zone.timeZone, from: local, at: date)
-        let day = ZoneClock.dayDeltaLabel(ZoneClock.dayDelta(of: zone.timeZone, from: local, at: date))
+        let offset = ZoneClock.offsetMinutes(of: zone.timeZone, from: homeZone, at: date)
+        let day = ZoneClock.dayDeltaLabel(ZoneClock.dayDelta(of: zone.timeZone, from: homeZone, at: date))
         let subtitle = [day, ZoneClock.offsetLabel(minutes: offset)].compactMap { $0 }.joined(separator: " · ")
         let light = daylight(sun: SolarPosition(date: date))
         let stacked = dynamicTypeSize.isAccessibilitySize

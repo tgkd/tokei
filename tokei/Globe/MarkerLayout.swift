@@ -37,12 +37,12 @@ enum MarkerLayout {
         zones: [Zone],
         frame: GlobeFrame,
         date: Date,
+        homeZone: TimeZone,
         selection: UUID?,
         bounds: CGRect,
         surface: ToySurface?,
         cache: MarkerLayoutCache
     ) -> [MarkerItem] {
-        let local = TimeZone.current
         var visible: [(zone: Zone, anchor: CGPoint, fade: Double)] = []
         for zone in zones {
             guard let location = zone.location else { continue }
@@ -64,8 +64,8 @@ enum MarkerLayout {
             let time = ZoneClock.time(date, in: zone.timeZone)
             var detail: String?
             if zone.id == selection {
-                let offset = ZoneClock.offsetMinutes(of: zone.timeZone, from: local, at: date)
-                let day = ZoneClock.dayDeltaLabel(ZoneClock.dayDelta(of: zone.timeZone, from: local, at: date))
+                let offset = ZoneClock.offsetMinutes(of: zone.timeZone, from: homeZone, at: date)
+                let day = ZoneClock.dayDeltaLabel(ZoneClock.dayDelta(of: zone.timeZone, from: homeZone, at: date))
                 detail = [day, ZoneClock.offsetLabel(minutes: offset)].compactMap { $0 }.joined(separator: " · ")
             }
             texts[zone.id] = (time, detail)

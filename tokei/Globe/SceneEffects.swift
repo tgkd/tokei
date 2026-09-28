@@ -10,6 +10,7 @@ struct SceneEffects: Equatable {
         let start: Date
 
         func position(at date: Date, spring: Spring) -> SIMD3<Double> {
+            guard date < start.addingTimeInterval(spring.settlingDuration) else { return target }
             let time = max(date.timeIntervalSince(start), 0)
             let gap = target - origin
             let travel = SIMD3(
@@ -21,6 +22,7 @@ struct SceneEffects: Equatable {
         }
 
         func velocity(at date: Date, spring: Spring) -> SIMD3<Double> {
+            guard date < start.addingTimeInterval(spring.settlingDuration) else { return .zero }
             let time = max(date.timeIntervalSince(start), 0)
             let gap = target - origin
             return SIMD3(
@@ -36,9 +38,17 @@ struct SceneEffects: Equatable {
         let start: Date
         var release: Date?
         var follow: Follow?
+        var isAtRest = false
 
         func center(at date: Date, spring: Spring) -> SIMD3<Double> {
             follow?.position(at: date, spring: spring) ?? point
+        }
+
+        func restDate(tuning: EffectTuning) -> Date? {
+            guard release == nil, !isAtRest else { return nil }
+            let pressed = start.addingTimeInterval(tuning.press.pressSpring.settlingDuration)
+            guard let follow else { return pressed }
+            return max(pressed, follow.start.addingTimeInterval(tuning.drag.follow.settlingDuration))
         }
 
         mutating func pull(to target: SIMD3<Double>, at date: Date, spring: Spring) {
@@ -49,6 +59,7 @@ struct SceneEffects: Equatable {
                 target: target,
                 start: date
             )
+            isAtRest = false
         }
     }
 
@@ -74,8 +85,22 @@ struct SceneEffects: Equatable {
     var inflateStart: Date?
     var snow: Snow?
 
+    enum Cadence {
+        case moving
+        case refilling
+        case still
+    }
+
     var isEmpty: Bool {
         press == nil && pop == nil && fling == nil && inflateStart == nil && snow == nil
+    }
+
+    var cadence: Cadence {
+        let pressMoves = press.map { $0.release != nil || !$0.isAtRest } ?? false
+        if pressMoves || pop != nil || fling != nil || inflateStart != nil {
+            return .moving
+        }
+        return snow == nil ? .still : .refilling
     }
 
     func snapshot(at date: Date, tuning: EffectTuning) -> EffectSnapshot {
@@ -135,6 +160,9 @@ struct SceneEffects: Equatable {
         if let release = press?.release, release.addingTimeInterval(tuning.press.releaseSpring.settlingDuration) <= date {
             settled.press = nil
         }
+        if let rest = press?.restDate(tuning: tuning), rest <= date {
+            settled.press?.isAtRest = true
+        }
         if let end = popEnd(tuning: tuning), end <= date {
             settled.pop = nil
         }
@@ -153,6 +181,7 @@ struct SceneEffects: Equatable {
     private func ends(tuning: EffectTuning) -> [Date?] {
         [
             press?.release.map { $0.addingTimeInterval(tuning.press.releaseSpring.settlingDuration) },
+            press?.restDate(tuning: tuning),
             popEnd(tuning: tuning),
             fling.map { $0.start.addingTimeInterval(tuning.fling.spring.settlingDuration) },
             inflateStart.map { $0.addingTimeInterval(tuning.inflate?.settlingDuration ?? 0) },
@@ -166,12 +195,13 @@ struct SceneEffects: Equatable {
 
     private static func pressAmount(_ press: Press, at date: Date, tuning: EffectTuning.Press) -> Double {
         let held = max(date.timeIntervalSince(press.start), 0)
+        let settled = press.start.addingTimeInterval(tuning.pressSpring.settlingDuration)
         guard let release = press.release else {
-            return tuning.pressSpring.value(target: 1.0, time: held)
+            return date < settled ? tuning.pressSpring.value(target: 1.0, time: held) : 1
         }
         let heldAtRelease = max(release.timeIntervalSince(press.start), 0)
-        let amount = tuning.pressSpring.value(target: 1.0, time: heldAtRelease)
-        let velocity = tuning.pressSpring.velocity(target: 1.0, time: heldAtRelease)
+        let amount = release < settled ? tuning.pressSpring.value(target: 1.0, time: heldAtRelease) : 1
+        let velocity = release < settled ? tuning.pressSpring.velocity(target: 1.0, time: heldAtRelease) : 0
         let since = max(date.timeIntervalSince(release), 0)
         return amount + tuning.releaseSpring.value(target: -amount, initialVelocity: velocity, time: since)
     }

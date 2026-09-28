@@ -116,7 +116,7 @@ struct RootView: View {
                 }
                 .transition(panelTransition)
             } else {
-                ScrubberPanel(now: store.now, shift: shift)
+                ScrubberPanel(now: store.now, shift: shift, homeZone: store.homeZone)
                     .transition(panelTransition)
             }
         }

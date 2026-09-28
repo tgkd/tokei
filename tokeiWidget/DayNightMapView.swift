@@ -11,7 +11,7 @@ struct DayNightMapView: View {
             let width = proxy.size.width
             let mapSize = CGSize(width: width, height: width / 2)
             let top = (proxy.size.height - mapSize.height) / 2
-            let center = ClockEntry.mapCenterLongitude
+            let center = ClockEntry.mapCenterLongitude(for: entry.homeZone)
             ZStack(alignment: .topLeading) {
                 ZStack {
                     RolledMapImage(name: "MapDay", centerLongitude: center, size: mapSize)

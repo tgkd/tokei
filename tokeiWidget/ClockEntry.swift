@@ -6,6 +6,7 @@ struct ClockEntry: TimelineEntry {
     let date: Date
     let zones: [Zone]
     let shiftMinutes: Int
+    let homeZone: TimeZone
     let nightMask: CGImage?
 
     var displayDate: Date {
@@ -16,7 +17,7 @@ struct ClockEntry: TimelineEntry {
         shiftMinutes != 0
     }
 
-    static var mapCenterLongitude: Double {
-        ZoneCoordinates.point(for: TimeZone.current.identifier)?.longitude ?? 0
+    static func mapCenterLongitude(for homeZone: TimeZone) -> Double {
+        ZoneCoordinates.point(for: homeZone.identifier)?.longitude ?? 0
     }
 }

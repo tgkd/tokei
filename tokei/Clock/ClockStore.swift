@@ -11,22 +11,32 @@ struct FocusRequest: Equatable {
 @Observable
 final class ClockStore {
     private(set) var zones: [Zone]
+    private(set) var homeZoneIdentifier: String?
     var now = Date()
     var selection: UUID?
     var focusRequest: FocusRequest?
 
     init() {
         zones = ZoneStorage.loadZones()
+        homeZoneIdentifier = ZoneStorage.loadHomeZoneIdentifier()
+    }
+
+    var homeZone: TimeZone {
+        ZoneStorage.homeZone(for: homeZoneIdentifier)
     }
 
     var homeLocation: GeoPoint? {
-        ZoneCoordinates.point(for: TimeZone.current.identifier)
+        ZoneCoordinates.point(for: homeZone.identifier)
     }
 
     func reload() {
         let stored = ZoneStorage.loadZones()
         if stored != zones {
             zones = stored
+        }
+        let storedHome = ZoneStorage.loadHomeZoneIdentifier()
+        if storedHome != homeZoneIdentifier {
+            homeZoneIdentifier = storedHome
         }
         now = Date()
     }
@@ -58,6 +68,13 @@ final class ClockStore {
     func move(fromOffsets source: IndexSet, toOffset destination: Int) {
         zones.move(fromOffsets: source, toOffset: destination)
         persist()
+    }
+
+    func setHomeZone(identifier: String?) {
+        guard identifier != homeZoneIdentifier else { return }
+        homeZoneIdentifier = identifier
+        ZoneStorage.saveHomeZoneIdentifier(identifier)
+        WidgetCenter.shared.reloadAllTimelines()
     }
 
     func toggleSelection(_ id: UUID) {
