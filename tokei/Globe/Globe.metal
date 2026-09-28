@@ -240,7 +240,7 @@ static float3 stars(float3 direction, float focal) {
     return color;
 }
 
-static float3 shadeSurface(float3 normal, float3 direction, float3 sun, float3 albedo, float lights, float water,
+static float3 shadeSurface(float3 normal, float3 glintNormal, float3 direction, float3 sun, float3 albedo, float lights, float water,
                            texture2d<float> lut, sampler lutSampler) {
     float muSun = dot(normal, sun);
     float3 transmitted = sunTransmittance(lut, lutSampler, GROUND_RADIUS + 1e-5, muSun);
@@ -264,8 +264,8 @@ static float3 shadeSurface(float3 normal, float3 direction, float3 sun, float3 a
     color += lightColor * glow * 0.9 * night;
 
     float3 halfway = normalize(sun - direction);
-    float nh = saturate(dot(normal, halfway));
-    float fresnel = 0.02 + 0.98 * pow(1.0 - saturate(dot(normal, -direction)), 5.0);
+    float nh = saturate(dot(glintNormal, halfway));
+    float fresnel = 0.02 + 0.98 * pow(1.0 - saturate(dot(glintNormal, -direction)), 5.0);
     float lobe = pow(nh, 300.0) * 0.32 + pow(nh, 48.0) * 0.035;
     color += water * sunlight * direct * lobe * (0.3 + 0.7 * fresnel);
 
@@ -291,35 +291,25 @@ static float3 encodeSRGB(float3 color) {
     return select(1.055 * pow(c, float3(1.0 / 2.4)) - 0.055, c * 12.92, c <= 0.0031308);
 }
 
-fragment half4 globeFragment(FullscreenVertex in [[stage_in]],
-                             constant GlobeUniforms &uniforms [[buffer(0)]],
-                             texture2d<float> dayTexture [[texture(0)]],
-                             texture2d<float> lightsTexture [[texture(1)]],
-                             texture2d<float> waterTexture [[texture(2)]],
-                             texture2d<float> lut [[texture(3)]],
-                             sampler surfaceSampler [[sampler(0)]],
-                             sampler lutSampler [[sampler(1)]]) {
-    float2 pixel = in.position.xy;
-    float focal = uniforms.viewport.z;
-    float exposure = uniforms.viewport.w;
-    float reveal = uniforms.principal.z;
-    float3 origin = uniforms.cameraPosition.xyz;
-    float3 sun = uniforms.sunDirection.xyz;
-    float3 direction = normalize(uniforms.cameraForward.xyz * focal
-                                 + uniforms.cameraRight.xyz * (pixel.x - uniforms.principal.x)
-                                 - uniforms.cameraUp.xyz * (pixel.y - uniforms.principal.y));
+static float3 globeRay(float2 pixel, float focal, constant GlobeUniforms &uniforms) {
+    return uniforms.cameraForward.xyz * focal
+           + uniforms.cameraRight.xyz * (pixel.x - uniforms.principal.x)
+           - uniforms.cameraUp.xyz * (pixel.y - uniforms.principal.y);
+}
 
-    float along = -dot(origin, direction);
+static float globeCoverage(float3 origin, float3 direction, float along, float focal) {
     float closestDistance = length(origin + direction * along);
     float edgePixels = (closestDistance - GROUND_RADIUS) * focal / max(along, 1e-3);
-    float coverage = saturate(0.5 - edgePixels);
+    return saturate(0.5 - edgePixels);
+}
 
-    float3 ground = sphereHit(origin, direction, GROUND_RADIUS);
-    bool groundHit = ground.z > 0.5 && ground.x > 0.0;
-    float3 surfacePoint = groundHit ? origin + direction * ground.x : normalize(origin + direction * max(along, 0.0));
-    float groundDistance = groundHit ? ground.x : length(surfacePoint - origin);
-    float3 normal = normalize(surfacePoint);
+struct SurfaceCoordinates {
+    float2 uv;
+    float2 dx;
+    float2 dy;
+};
 
+static SurfaceCoordinates surfaceCoordinates(float3 normal) {
     float longitude = atan2(normal.x, normal.z);
     float latitude = asin(clamp(normal.y, -1.0, 1.0));
     float2 uv = float2(longitude / (2.0 * M_PI_F) + 0.5, 0.5 - latitude / M_PI_F);
@@ -330,8 +320,174 @@ fragment half4 globeFragment(FullscreenVertex in [[stage_in]],
     float dySeamless = dfdy(seamless);
     dx.x = abs(dx.x) < abs(dxSeamless) ? dx.x : dxSeamless;
     dy.x = abs(dy.x) < abs(dySeamless) ? dy.x : dySeamless;
+    return {uv, dx, dy};
+}
 
-    float3 background = stars(direction, focal);
+struct EffectUniforms {
+    float4 shapeX;
+    float4 shapeY;
+    float4 shapeZ;
+    float4 unshapeX;
+    float4 unshapeY;
+    float4 unshapeZ;
+    float4 dent;
+    float4 bump;
+    float4 ripple;
+    float4 radii;
+    float4 wave;
+    float4 state;
+    float4 detail;
+};
+
+struct ToyMaterial {
+    float sparkle;
+    float sparkleDensity;
+    float sparkleSharpness;
+    float sparkleScatter;
+    float plateTilt;
+    float plateScale;
+    float seams;
+    float snowCover;
+    float snowRecovery;
+    float snowDepth;
+    float snowRim;
+    float reserved;
+};
+
+static float snowFill(texture2d<float> snowTexture, sampler snowSampler, float2 uv, float clock, float recovery) {
+    return smoothstep(0.0, recovery, clock - snowTexture.sample(snowSampler, uv, level(0.0)).r);
+}
+
+struct Cellular {
+    float2 cell;
+    float edge;
+};
+
+static Cellular cellular(float2 point, float seed) {
+    float2 base = floor(point);
+    float2 local = point - base;
+    float first = 8.0;
+    float second = 8.0;
+    float2 nearest = base;
+    for (int y = -1; y <= 1; y++) {
+        for (int x = -1; x <= 1; x++) {
+            float2 offset = float2(float(x), float(y));
+            float2 jitter = hash33(float3(base + offset, seed)).xy;
+            float distance = length(offset + jitter - local);
+            if (distance < first) {
+                second = first;
+                first = distance;
+                nearest = base + offset;
+            } else if (distance < second) {
+                second = distance;
+            }
+        }
+    }
+    return {nearest, second - first};
+}
+
+static float cellLine(float edge, float footprint) {
+    return (1.0 - smoothstep(0.0, footprint * 1.5 + 0.02, edge)) * saturate(1.5 - footprint * 4.0);
+}
+
+constant bool realisticEffects [[function_constant(0)]];
+
+static float3x3 effectShape(constant EffectUniforms &effects) {
+    return float3x3(effects.shapeX.xyz, effects.shapeY.xyz, effects.shapeZ.xyz);
+}
+
+static float3x3 effectUnshape(constant EffectUniforms &effects) {
+    return float3x3(effects.unshapeX.xyz, effects.unshapeY.xyz, effects.unshapeZ.xyz);
+}
+
+static bool effectsActive(constant EffectUniforms &effects) {
+    return effects.state.y > 0.5;
+}
+
+static float effectWeight(float3 direction, float3 center, float radius) {
+    return exp(-(1.0 - dot(direction, center)) / (radius * radius));
+}
+
+static float rippleWave(float3 direction, constant EffectUniforms &effects, thread float3 &slope) {
+    float age = effects.ripple.w;
+    if (age < 0.0) {
+        slope = float3(0.0);
+        return 0.0;
+    }
+    float cosine = clamp(dot(direction, effects.ripple.xyz), -1.0, 1.0);
+    float wavelength = effects.wave.z;
+    float front = acos(cosine) - effects.wave.w * age;
+    float envelope = exp(-effects.state.x * age) * exp(-(front / wavelength) * (front / wavelength));
+    float phase = 2.0 * M_PI_F * front / wavelength;
+    float profileSlope = envelope * (2.0 * M_PI_F / wavelength * cos(phase) - 2.0 * front / (wavelength * wavelength) * sin(phase));
+    float3 away = (direction * cosine - effects.ripple.xyz) / max(sqrt(max(1.0 - cosine * cosine, 0.0)), 1e-4);
+    slope = profileSlope * away;
+    return envelope * sin(phase);
+}
+
+static float effectOffset(float3 direction, constant EffectUniforms &effects, thread float3 &slope) {
+    float dent = -effects.dent.w * effectWeight(direction, effects.dent.xyz, effects.radii.x);
+    float bump = effects.bump.w * effectWeight(direction, effects.bump.xyz, effects.radii.y);
+    slope = dent / (effects.radii.x * effects.radii.x) * (effects.dent.xyz - direction * dot(direction, effects.dent.xyz))
+          + bump / (effects.radii.y * effects.radii.y) * (effects.bump.xyz - direction * dot(direction, effects.bump.xyz));
+    float3 waveSlope;
+    float wave = rippleWave(direction, effects, waveSlope);
+    slope += effects.wave.y * waveSlope;
+    return dent + bump + effects.wave.y * wave;
+}
+
+static float3 rippleSlope(float3 direction, constant EffectUniforms &effects) {
+    float3 slope;
+    rippleWave(direction, effects, slope);
+    return slope;
+}
+
+struct ToyPalette {
+    float4 backdrop;
+    float4 ocean;
+    float4 oceanNight;
+    float4 landLow;
+    float4 landHigh;
+    float4 landNight;
+    float4 cityLight;
+    float4 twilight;
+    float4 rim;
+    float4 snow;
+};
+
+
+fragment half4 globeFragment(FullscreenVertex in [[stage_in]],
+                             constant GlobeUniforms &uniforms [[buffer(0)]],
+                             constant EffectUniforms &effects [[buffer(2)]],
+                             texture2d<float> dayTexture [[texture(0)]],
+                             texture2d<float> lightsTexture [[texture(1)]],
+                             texture2d<float> waterTexture [[texture(2)]],
+                             texture2d<float> lut [[texture(3)]],
+                             sampler surfaceSampler [[sampler(0)]],
+                             sampler lutSampler [[sampler(1)]]) {
+    float2 pixel = in.position.xy;
+    float focal = uniforms.viewport.z;
+    float exposure = uniforms.viewport.w;
+    float reveal = uniforms.principal.z;
+    float3x3 unshape = effectUnshape(effects);
+    float3 origin = realisticEffects ? unshape * uniforms.cameraPosition.xyz : uniforms.cameraPosition.xyz;
+    float3 sun = uniforms.sunDirection.xyz;
+    float3 ray = globeRay(pixel, focal, uniforms);
+    float3 direction = realisticEffects ? normalize(unshape * ray) : normalize(ray);
+
+    float along = -dot(origin, direction);
+    float coverage = globeCoverage(origin, direction, along, focal);
+
+    float3 ground = sphereHit(origin, direction, GROUND_RADIUS);
+    bool groundHit = ground.z > 0.5 && ground.x > 0.0;
+    float3 surfacePoint = groundHit ? origin + direction * ground.x : normalize(origin + direction * max(along, 0.0));
+    float groundDistance = groundHit ? ground.x : length(surfacePoint - origin);
+    float3 normal = normalize(surfacePoint);
+
+    SurfaceCoordinates coordinates = surfaceCoordinates(normal);
+    float2 uv = coordinates.uv;
+
+    float3 background = stars(realisticEffects ? normalize(ray) : direction, focal);
     float3 shell = sphereHit(origin, direction, TOP_RADIUS);
     bool inAtmosphere = shell.z > 0.5 && shell.y > 0.0;
     float entry = max(shell.x, 0.0);
@@ -344,18 +500,198 @@ fragment half4 globeFragment(FullscreenVertex in [[stage_in]],
 
     float3 hitColor = float3(0.0);
     if (coverage > 0.0) {
-        gradient2d gradient = gradient2d(dx, dy);
+        gradient2d gradient = gradient2d(coordinates.dx, coordinates.dy);
         float3 albedo = dayTexture.sample(surfaceSampler, uv, gradient).rgb;
         float lights = lightsTexture.sample(surfaceSampler, uv, gradient).r;
         float water = waterTexture.sample(surfaceSampler, uv, gradient).r;
-        float3 surface = shadeSurface(normal, direction, sun, albedo, lights, water, lut, lutSampler);
+        float3 glintNormal = normal;
+        if (realisticEffects && effectsActive(effects)) {
+            float3 slope;
+            effectOffset(normal, effects, slope);
+            glintNormal = normalize(normal - slope - effects.wave.x * rippleSlope(normal, effects));
+        }
+        float3 surface = shadeSurface(normal, glintNormal, direction, sun, albedo, lights, water, lut, lutSampler);
         Scattering air = atmosphere(origin, direction, sun, entry, max(groundDistance, entry), true, lut, lutSampler);
         float haze = mix(0.2, 0.85, smoothstep(-0.12, 0.10, dot(normal, sun)));
         hitColor = (surface * air.transmittance + air.light * haze) * exposure;
+        if (realisticEffects && effectsActive(effects)) {
+            hitColor += float3(1.0, 0.55, 0.22) * effects.radii.z * effectWeight(normal, effects.bump.xyz, effects.radii.y);
+        }
     }
 
     float3 color = mix(missColor, hitColor, coverage);
     color = mix(background, color, reveal);
+    color = encodeSRGB(tonemap(color));
+    float noise = (hash12(pixel) + hash12(pixel + 71.3) - 1.0) / 255.0;
+    return half4(half3(color + noise), 1.0h);
+}
+
+struct ToyVertex {
+    float4 position;
+};
+
+static float4 projectToClip(float3 worldPosition, constant GlobeUniforms &uniforms) {
+    float3 offset = worldPosition - uniforms.cameraPosition.xyz;
+    float depth = dot(offset, uniforms.cameraForward.xyz);
+    float focal = uniforms.viewport.z;
+    float2 pixel = float2(uniforms.principal.x + focal * dot(offset, uniforms.cameraRight.xyz) / depth,
+                          uniforms.principal.y - focal * dot(offset, uniforms.cameraUp.xyz) / depth);
+    float2 ndc = float2(pixel.x / uniforms.viewport.x * 2.0 - 1.0,
+                       1.0 - pixel.y / uniforms.viewport.y * 2.0);
+    float distance = length(uniforms.cameraPosition.xyz);
+    float near = max(distance - 1.1, 0.05);
+    float far = distance + 1.1;
+    return float4(ndc * depth, far * (depth - near) / (far - near), depth);
+}
+
+struct ToyMeshVertex {
+    float4 position [[position]];
+    float3 spherePosition;
+};
+
+vertex ToyMeshVertex toyVertex(uint vertexID [[vertex_id]],
+                              constant GlobeUniforms &uniforms [[buffer(0)]],
+                              const device ToyVertex *vertices [[buffer(1)]],
+                              constant EffectUniforms &effects [[buffer(2)]]) {
+    ToyVertex meshVertex = vertices[vertexID];
+    float3 spherePosition = meshVertex.position.xyz;
+    float3 worldPosition = spherePosition;
+    if (effectsActive(effects)) {
+        float3 unit = normalize(spherePosition);
+        float3 slope;
+        float radius = 1.0 + meshVertex.position.w * effects.radii.w + effectOffset(unit, effects, slope);
+        spherePosition = unit * radius;
+        worldPosition = effectShape(effects) * spherePosition;
+    }
+    ToyMeshVertex out;
+    out.position = projectToClip(worldPosition, uniforms);
+    out.spherePosition = spherePosition;
+    return out;
+}
+
+
+fragment half4 globeFragmentToyMesh(ToyMeshVertex in [[stage_in]],
+                                    constant GlobeUniforms &uniforms [[buffer(0)]],
+                                    constant ToyPalette &palette [[buffer(1)]],
+                                    constant EffectUniforms &effects [[buffer(2)]],
+                                    constant ToyMaterial &material [[buffer(3)]],
+                                    texture2d<float> dayTexture [[texture(0)]],
+                                    texture2d<float> lightsTexture [[texture(1)]],
+                                    texture2d<float> waterTexture [[texture(2)]],
+                                    texture2d<float> normalHeightTexture [[texture(3)]],
+                                    texture2d<float> snowTexture [[texture(4)]],
+                                    sampler surfaceSampler [[sampler(0)]]) {
+    float2 pixel = in.position.xy;
+    float3 direction = normalize(in.spherePosition - effectUnshape(effects) * uniforms.cameraPosition.xyz);
+    float3 sun = uniforms.sunDirection.xyz;
+    float3 nG = normalize(in.spherePosition);
+    SurfaceCoordinates coordinates = surfaceCoordinates(nG);
+    float muG = dot(nG, sun);
+    float terminatorWidth = max(fwidth(muG), 0.01);
+    gradient2d gradient = gradient2d(coordinates.dx, coordinates.dy);
+    float4 normalHeight = normalHeightTexture.sample(surfaceSampler, coordinates.uv, gradient);
+    float normalLengthSquared = dot(normalHeight.xyz, normalHeight.xyz);
+    float3 nM = normalLengthSquared > 1e-8 ? normalHeight.xyz * rsqrt(normalLengthSquared) : nG;
+    float lights = lightsTexture.sample(surfaceSampler, coordinates.uv, gradient).r;
+    float water = saturate(waterTexture.sample(surfaceSampler, coordinates.uv, gradient).r);
+    float relief = saturate(normalHeight.w);
+    float seam = 0.0;
+    if (material.plateTilt > 0.0 || material.seams > 0.0) {
+        float2 plateGrid = float2(180.0, 90.0) * material.plateScale;
+        Cellular plate = cellular(coordinates.uv * plateGrid, 23.0);
+        float3 lean = hash33(float3(plate.cell, 29.0)) - 0.5;
+        lean -= nG * dot(lean, nG);
+        nM = normalize(nM + material.plateTilt * (1.0 - water) * lean);
+        float footprint = max(length(coordinates.dx * plateGrid), length(coordinates.dy * plateGrid));
+        seam = material.seams * (1.0 - water) * cellLine(plate.edge, footprint);
+    }
+    if (effectsActive(effects)) {
+        float3 slope;
+        effectOffset(nG, effects, slope);
+        nM = normalize(mix(nG, nM, effects.radii.w) - slope - mix(effects.detail.z, 1.0, water) * effects.wave.x * rippleSlope(nG, effects));
+        relief *= effects.radii.w;
+    }
+    float snowAmount = 0.0;
+    float snowRim = 0.0;
+    if (material.snowCover > 0.0) {
+        float clock = effects.state.w;
+        float recovery = max(material.snowRecovery, 0.01);
+        float2 texel = 1.0 / float2(snowTexture.get_width(), snowTexture.get_height());
+        float fill = snowFill(snowTexture, surfaceSampler, coordinates.uv, clock, recovery);
+        float eastFill = snowFill(snowTexture, surfaceSampler, coordinates.uv + float2(texel.x, 0.0), clock, recovery);
+        float westFill = snowFill(snowTexture, surfaceSampler, coordinates.uv - float2(texel.x, 0.0), clock, recovery);
+        float northFill = snowFill(snowTexture, surfaceSampler, coordinates.uv - float2(0.0, texel.y), clock, recovery);
+        float southFill = snowFill(snowTexture, surfaceSampler, coordinates.uv + float2(0.0, texel.y), clock, recovery);
+        float cosLatitude = max(length(nG.xz), 0.05);
+        float3 eastward = float3(nG.z, 0.0, -nG.x) / cosLatitude;
+        float3 northward = cross(nG, eastward);
+        float3 drift = (eastFill - westFill) / (4.0 * M_PI_F * texel.x * cosLatitude) * eastward
+                     + (northFill - southFill) / (2.0 * M_PI_F * texel.y) * northward;
+        nM = normalize(nM - material.snowDepth * (1.0 - water) * drift);
+        snowAmount = (1.0 - water) * material.snowCover;
+        snowRim = smoothstep(0.25, 0.6, fill) * (1.0 - smoothstep(0.65, 0.95, fill)) * (1.0 - water);
+        seam *= 1.0 - snowAmount;
+        snowAmount *= 0.35 + 0.65 * fill;
+    }
+    float3 land = mix(palette.landLow.xyz, palette.landHigh.xyz, smoothstep(0.35, 0.95, relief));
+    land = mix(land, palette.snow.xyz, snowAmount) + palette.snow.xyz * snowRim * material.snowRim;
+    float3 day = mix(land, palette.ocean.xyz, water);
+    float warmth = step(0.0, muG) * (1.0 - smoothstep(0.0, 0.15, muG)) * 0.18;
+    day = mix(day, palette.twilight.xyz, warmth);
+    float3 night = mix(palette.landNight.xyz, palette.oceanNight.xyz, water);
+    float dayGate = smoothstep(-terminatorWidth, terminatorWidth, muG);
+    const float wrap = 0.25;
+    float lit = saturate((dot(nM, sun) + wrap) / (1.0 + wrap));
+    float viewCosine = saturate(dot(nG, -direction));
+    float limb = mix(0.72, 1.0, sqrt(viewCosine));
+    float3 shade = mix(night, day, 0.4);
+    float3 color = mix(night, mix(shade, day, lit) * limb, dayGate);
+    float nightGate = 1.0 - smoothstep(-0.1736, 0.0175, muG);
+    gradient2d haloGradient = gradient2d(coordinates.dx * 6.0, coordinates.dy * 6.0);
+    float halo = lightsTexture.sample(surfaceSampler, coordinates.uv, haloGradient).r;
+    float glow = pow(lights, 1.6) + pow(halo, 1.2) * 0.35;
+    color += palette.cityLight.xyz * glow * nightGate * (1.0 - water);
+
+    float3 halfVector = sun - direction;
+    float3 halfway = halfVector * rsqrt(max(dot(halfVector, halfVector), 1e-8));
+    float nh = saturate(dot(nM, halfway));
+    float specular = pow(nh, 800.0) * mix(0.45, 1.0, water)
+                   + pow(nh, 40.0) * mix(0.035, 0.04, water);
+    color += float3(specular * dayGate * saturate(muG * 4.0));
+    color = mix(color, palette.oceanNight.xyz, seam);
+    if (material.sparkle > 0.0) {
+        float2 glitterGrid = float2(1440.0, 720.0) * material.sparkleDensity;
+        float2 glitterPoint = coordinates.uv * glitterGrid;
+        float2 glitterCell = floor(glitterPoint);
+        float3 grain = hash33(float3(glitterCell, 3.0));
+        float glitterFootprint = max(length(coordinates.dx * glitterGrid), length(coordinates.dy * glitterGrid));
+        float speck = 1.0 - smoothstep(0.16, 0.16 + glitterFootprint, length(glitterPoint - glitterCell - 0.25 - 0.5 * grain.xy));
+        float3 facet = normalize(nM + (hash33(float3(glitterCell, 11.0)) - 0.5) * material.sparkleScatter);
+        float glint = pow(saturate(dot(reflect(direction, facet), sun)), material.sparkleSharpness);
+        float resolved = saturate(1.0 / max(glitterFootprint, 1e-4) - 0.5);
+        color += palette.cityLight.xyz * glint * speck * resolved * step(0.55, grain.z) * material.sparkle * dayGate * (1.0 - water);
+    }
+    float rim = pow(1.0 - saturate(dot(nG, -direction)), 4.0) * 0.12;
+    color += palette.rim.xyz * rim;
+    if (effectsActive(effects)) {
+        float pressWeight = effectWeight(nG, effects.dent.xyz, effects.radii.x);
+        float hollow = effects.dent.w * pressWeight;
+        color *= saturate(1.0 - effects.state.z * hollow);
+        if (effects.detail.x > 0.0 || effects.detail.y > 0.0) {
+            float2 crackGrid = float2(300.0, 150.0);
+            Cellular crack = cellular(coordinates.uv * crackGrid, 41.0);
+            float crackFootprint = max(length(coordinates.dx * crackGrid), length(coordinates.dy * crackGrid));
+            float crystal = hash33(float3(crack.cell, 43.0)).x;
+            color = mix(color, palette.landHigh.xyz * 1.15, saturate(effects.detail.x * pressWeight * (0.55 + 0.45 * crystal)));
+            color = mix(color, palette.oceanNight.xyz, saturate(0.8 * effects.detail.y * (1.0 - snowAmount) * smoothstep(0.45, 0.85, pressWeight) * cellLine(crack.edge, crackFootprint)));
+        }
+        if (effects.detail.w > 0.0) {
+            float3 flashSlope;
+            color += palette.cityLight.xyz * effects.detail.w * max(rippleWave(nG, effects, flashSlope), 0.0);
+        }
+        color += palette.cityLight.xyz * effects.radii.z * effectWeight(nG, effects.bump.xyz, effects.radii.y);
+    }
+    color = mix(palette.backdrop.xyz, color, uniforms.principal.z);
     color = encodeSRGB(tonemap(color));
     float noise = (hash12(pixel) + hash12(pixel + 71.3) - 1.0) / 255.0;
     return half4(half3(color + noise), 1.0h);

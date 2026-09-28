@@ -1,6 +1,8 @@
 import SwiftUI
 
 struct MarkerChip: View {
+    @Environment(\.sceneAccent) private var accent
+
     let name: String
     let time: String
     let detail: String?
@@ -15,7 +17,7 @@ struct MarkerChip: View {
                     .foregroundStyle(.white)
                 Text(time)
                     .font(Font(ChipMetrics.timeFont))
-                    .foregroundStyle(isShifted ? Color.sunlight : Color.white.opacity(0.72))
+                    .foregroundStyle(isShifted ? accent : Color.white.opacity(0.72))
             }
             if let detail {
                 Text(detail)
@@ -30,7 +32,7 @@ struct MarkerChip: View {
         .background(.black.opacity(0.56), in: .rect(cornerRadius: detail == nil ? 13 : 11))
         .overlay {
             RoundedRectangle(cornerRadius: detail == nil ? 13 : 11)
-                .strokeBorder(isSelected ? Color.sunlight.opacity(0.9) : Color.white.opacity(0.14), lineWidth: isSelected ? 1 : 0.5)
+                .strokeBorder(isSelected ? accent.opacity(0.9) : Color.white.opacity(0.14), lineWidth: isSelected ? 1 : 0.5)
         }
     }
 }

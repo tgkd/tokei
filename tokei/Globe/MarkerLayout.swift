@@ -39,13 +39,15 @@ enum MarkerLayout {
         date: Date,
         selection: UUID?,
         bounds: CGRect,
+        surface: ToySurface?,
         cache: MarkerLayoutCache
     ) -> [MarkerItem] {
         let local = TimeZone.current
         var visible: [(zone: Zone, anchor: CGPoint, fade: Double)] = []
         for zone in zones {
             guard let location = zone.location else { continue }
-            let point = location.unitVector
+            let unit = location.unitVector
+            let point = frame.effects.place(unit, surfaceRadius: surface?.radius(along: unit) ?? 1)
             let facing = frame.visibility(of: point)
             guard facing > 0, let anchor = frame.project(point) else { continue }
             visible.append((zone, anchor, min(facing / 0.2, 1)))

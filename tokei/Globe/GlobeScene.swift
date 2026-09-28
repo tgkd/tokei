@@ -17,11 +17,13 @@ struct GlobeScene: View {
     var body: some View {
         GeometryReader { proxy in
             let size = proxy.size
-            TimelineView(.animation(minimumInterval: nil, paused: scene.cameraMotion == nil)) { context in
+            TimelineView(.animation(minimumInterval: nil, paused: scene.cameraMotion == nil && scene.effects.isEmpty)) { context in
                 let frame = GlobeFrame(
                     camera: scene.camera(at: context.date),
                     size: size,
-                    sun: SolarPosition(date: date).direction
+                    sun: SolarPosition(date: date).direction,
+                    style: scene.style,
+                    effects: scene.effects.snapshot(at: context.date, tuning: scene.style.effects)
                 )
                 let items = MarkerLayout.items(
                     zones: store.zones,
@@ -29,6 +31,7 @@ struct GlobeScene: View {
                     date: date,
                     selection: store.selection,
                     bounds: focusRect.insetBy(dx: 8, dy: 4),
+                    surface: frame.style.usesMesh ? scene.renderer?.toyMesh?.shapes[frame.style.toyShape]?.surface : nil,
                     cache: cache
                 )
                 ZStack(alignment: .topLeading) {
@@ -46,6 +49,15 @@ struct GlobeScene: View {
                 }
                 .simultaneousGesture(rotation(frame: frame))
                 .simultaneousGesture(zoom)
+                .gesture(
+                    GlobePressGesture { location in
+                        if let point = frame.surfacePoint(at: location) {
+                            scene.press(at: point, footprint: 16 / max(frame.globeRadius, 40))
+                        }
+                    } onRelease: { moved in
+                        scene.releasePress(moved: moved)
+                    }
+                )
             }
             .onChange(of: focusRect, initial: true) {
                 scene.fit(to: focusRect, in: size, facing: store.homeLocation)
@@ -61,9 +73,22 @@ struct GlobeScene: View {
             guard !Task.isCancelled else { return }
             scene.settle(motion)
         }
+        .task(id: scene.effects) {
+            guard let end = scene.effects.nextEnd(tuning: scene.style.effects) else { return }
+            let wait = end.timeIntervalSinceNow
+            if wait > 0 {
+                try? await Task.sleep(for: .seconds(wait))
+            }
+            guard !Task.isCancelled else { return }
+            scene.settleEffects()
+        }
         .onChange(of: store.focusRequest) { _, request in
             guard let request else { return }
-            scene.fly(to: scene.destination.facing(request.point))
+            scene.focus(on: request.point)
+        }
+        .onChange(of: store.selection) { _, selection in
+            guard let selection, let location = store.zones.first(where: { $0.id == selection })?.location else { return }
+            scene.pop(at: location.unitVector)
         }
     }
 
@@ -89,6 +114,8 @@ struct GlobeScene: View {
                 let yawVelocity = -Double(value.velocity.width) / dragRadius
                 let pitchVelocity = Double(value.velocity.height) / dragRadius
                 scene.coast(yawVelocity: yawVelocity, pitchVelocity: pitchVelocity)
+                let axis = frame.right * Double(value.velocity.width) - frame.up * Double(value.velocity.height)
+                scene.fling(axis: axis, speed: hypot(yawVelocity, pitchVelocity))
             }
     }
 

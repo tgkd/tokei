@@ -8,6 +8,7 @@ struct GlobeCanvas: UIViewRepresentable {
     func makeUIView(context: Context) -> GlobeLayerView {
         let view = GlobeLayerView(frame: .zero)
         view.renderer = renderer
+        view.backgroundColor = UIColor(frame.style.backdrop)
         view.frameModel = frame
         return view
     }
@@ -15,6 +16,9 @@ struct GlobeCanvas: UIViewRepresentable {
     func updateUIView(_ view: GlobeLayerView, context: Context) {
         if view.renderer !== renderer {
             view.renderer = renderer
+        }
+        if view.frameModel?.style != frame.style {
+            view.backgroundColor = UIColor(frame.style.backdrop)
         }
         view.frameModel = frame
         if isReady && !view.hasStartedReveal {

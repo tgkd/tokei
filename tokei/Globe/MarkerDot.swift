@@ -1,11 +1,13 @@
 import SwiftUI
 
 struct MarkerDot: View {
+    @Environment(\.sceneAccent) private var accent
+
     let isSelected: Bool
 
     var body: some View {
         Circle()
-            .fill(isSelected ? Color.sunlight : Color.white)
+            .fill(isSelected ? accent : Color.white)
             .frame(width: ChipMetrics.dotRadius * 2, height: ChipMetrics.dotRadius * 2)
             .overlay {
                 Circle().strokeBorder(.black.opacity(0.55), lineWidth: 1)

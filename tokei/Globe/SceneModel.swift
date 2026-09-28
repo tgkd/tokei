@@ -2,6 +2,7 @@ import CoreGraphics
 import Foundation
 import Observation
 import WidgetKit
+import simd
 
 @MainActor
 @Observable
@@ -11,19 +12,128 @@ final class SceneModel {
     var shift: Double
     var shiftGlide: ShiftGlide?
     var isScrubbing = false
+    var style: SceneStyle {
+        didSet {
+            style.save()
+            updateSound()
+            if style.usesMesh && style != oldValue {
+                inflate(announced: true)
+            }
+        }
+    }
+    var soundEnabled: Bool {
+        didSet {
+            UserDefaults.standard.set(soundEnabled, forKey: Self.soundKey)
+            updateSound()
+        }
+    }
+    var isForeground = true {
+        didSet {
+            updateSound()
+        }
+    }
+    var reduceMotion = false
+    var effects = SceneEffects()
+    @ObservationIgnored private var pressFootprint = FootprintShape.random(radius: 0.08)
+    private(set) var cue: FeedbackCue?
     private(set) var isGlobeReady = false
     private(set) var hasPlacedCamera = false
     let renderer = GlobeRenderer()
+    @ObservationIgnored private let feedback = FeedbackPlayer()
 
     static let shiftRange = -72.0 * 60 ... 72.0 * 60
+    private static let soundKey = "sound_enabled"
+    private static let deliberatePress = 0.2
 
     init() {
         shift = Double(ZoneStorage.loadShift())
+        style = SceneStyle.load()
+        soundEnabled = UserDefaults.standard.object(forKey: Self.soundKey) as? Bool ?? true
+        updateSound()
     }
 
     func prepareGlobe() async {
         await renderer?.loadTextures()
         isGlobeReady = renderer?.isReady ?? false
+        if isGlobeReady && style.usesMesh {
+            inflate(announced: false)
+        }
+    }
+
+    func emit(_ kind: FeedbackCue.Kind) {
+        let cue = FeedbackCue(kind: kind)
+        self.cue = cue
+        feedback.play(cue, style: style, soundEnabled: soundEnabled)
+    }
+
+    func press(at point: SIMD3<Double>, footprint: Double) {
+        emit(.press)
+        pressFootprint = FootprintShape.random(radius: footprint)
+        stampSnow(at: point, shape: pressFootprint)
+        guard !reduceMotion else { return }
+        effects.press = SceneEffects.Press(point: point, start: Date())
+    }
+
+    func releasePress(moved: Bool) {
+        guard var press = effects.press, press.release == nil else { return }
+        let now = Date()
+        press.release = now
+        effects.press = press
+        stampSnow(at: press.point, shape: pressFootprint)
+        if !moved && now.timeIntervalSince(press.start) >= Self.deliberatePress {
+            emit(.release)
+        }
+    }
+
+    func pop(at point: SIMD3<Double>) {
+        emit(.pop)
+        stampSnow(at: point, shape: FootprintShape.random(radius: 0.035))
+        guard !reduceMotion else { return }
+        effects.pop = SceneEffects.Pop(point: point, start: Date())
+    }
+
+    private func stampSnow(at point: SIMD3<Double>, shape: FootprintShape) {
+        let material = style.toyMaterial
+        guard material.snowCover > 0, let snowCover = renderer?.snowCover else { return }
+        let now = Date()
+        let recovery = Double(material.snowRecovery)
+        snowCover.stamp(at: point, shape: shape, recovery: recovery, now: now)
+        effects.snow = SceneEffects.Snow(epoch: snowCover.epoch, until: now.addingTimeInterval(recovery))
+    }
+
+    func fling(axis: SIMD3<Double>, speed: Double) {
+        guard !reduceMotion, length(axis) > 1e-6 else { return }
+        let tuning = style.effects.fling
+        let stretch = min(speed * tuning.stretchPerSpeed, tuning.maximumStretch)
+        guard stretch > 0.002 else { return }
+        effects.fling = SceneEffects.Fling(axis: normalize(axis), stretch: stretch, start: Date())
+    }
+
+    func settleEffects() {
+        let hadSnow = effects.snow != nil
+        effects = effects.settled(at: Date(), tuning: style.effects)
+        if hadSnow && effects.snow == nil {
+            renderer?.snowCover?.reset()
+        }
+    }
+
+    func focus(on point: GeoPoint) {
+        let target = destination.facing(point).clamped()
+        let from = camera(at: Date())
+        let turn = acos(min(max(dot(normalize(from.position), normalize(target.position)), -1), 1))
+        fly(to: target, arc: reduceMotion ? 0 : style.effects.flightArc * turn / .pi)
+    }
+
+    private func inflate(announced: Bool) {
+        if announced {
+            emit(.inflate)
+        }
+        guard !reduceMotion, style.effects.inflate != nil else { return }
+        effects.inflateStart = Date()
+    }
+
+    private func updateSound() {
+        feedback.setSoundActive(isForeground && style.soundTimbre != nil && soundEnabled)
     }
 
     func camera(at date: Date) -> OrbitCamera {
@@ -49,11 +159,11 @@ final class SceneModel {
         self.cameraMotion = nil
     }
 
-    func fly(to target: OrbitCamera, duration: Double = 1.0) {
+    func fly(to target: OrbitCamera, duration: Double = 1.0, arc: Double = 0) {
         let now = Date()
         let from = camera(at: now)
         camera = from
-        cameraMotion = .flight(start: now, from: from, to: target.clamped(), duration: duration)
+        cameraMotion = .flight(start: now, from: from, to: target.clamped(), duration: duration, arc: arc)
     }
 
     func coast(yawVelocity: Double, pitchVelocity: Double) {
@@ -124,6 +234,9 @@ final class SceneModel {
 
     func settle(_ glide: ShiftGlide) {
         guard shiftGlide == glide else { return }
+        if glide.target == 0 && abs(glide.origin) >= 1 {
+            emit(.snap)
+        }
         shift = glide.target
         shiftGlide = nil
         ZoneStorage.saveShift(committedShift)

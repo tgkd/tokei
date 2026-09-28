@@ -6,6 +6,8 @@ struct GlobeFrame: Equatable {
     var camera: OrbitCamera
     var size: CGSize
     var sun: SIMD3<Double>
+    var style: SceneStyle
+    var effects = EffectSnapshot.none
 
     static func focalLength(for size: CGSize) -> Double {
         Double(min(size.width, size.height)) * 1.6
@@ -51,5 +53,15 @@ struct GlobeFrame: Equatable {
 
     func visibility(of point: SIMD3<Double>) -> Double {
         dot(normalize(point), normalize(position - point))
+    }
+
+    func surfacePoint(at location: CGPoint) -> SIMD3<Double>? {
+        let ray = normalize(forward * focalLength + right * Double(location.x - center.x) - up * Double(location.y - center.y))
+        let along = dot(position, ray)
+        let discriminant = along * along - dot(position, position) + 1
+        guard discriminant >= 0 else { return nil }
+        let distance = -along - sqrt(discriminant)
+        guard distance > 0 else { return nil }
+        return normalize(position + ray * distance)
     }
 }

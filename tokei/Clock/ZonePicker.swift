@@ -2,6 +2,7 @@ import SwiftUI
 
 struct ZonePicker: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.sceneAccent) private var accent
 
     let date: Date
     let existing: Set<String>
@@ -71,7 +72,7 @@ struct ZonePicker: View {
             if added {
                 Image(systemName: "checkmark")
                     .font(.body.weight(.semibold))
-                    .foregroundStyle(.sunlight)
+                    .foregroundStyle(accent)
             } else {
                 Text(ZoneClock.time(date, in: zone))
                     .font(.body)

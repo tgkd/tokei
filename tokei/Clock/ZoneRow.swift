@@ -1,6 +1,8 @@
 import SwiftUI
 
 struct ZoneRow: View {
+    @Environment(\.sceneAccent) private var accent
+
     let zone: Zone
     let date: Date
     let isShifted: Bool
@@ -21,7 +23,7 @@ struct ZoneRow: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(zone.cityName)
                     .font(.headline)
-                    .foregroundStyle(isSelected ? Color.sunlight : Color.primary)
+                    .foregroundStyle(isSelected ? accent : Color.primary)
                     .lineLimit(1)
                 Text(subtitle)
                     .font(.subheadline)
@@ -32,7 +34,7 @@ struct ZoneRow: View {
             Text(ZoneClock.time(date, in: zone.timeZone))
                 .font(.system(size: 28, weight: .medium, design: .rounded))
                 .monospacedDigit()
-                .foregroundStyle(isShifted ? Color.sunlight : Color.primary)
+                .foregroundStyle(isShifted ? accent : Color.primary)
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
         }

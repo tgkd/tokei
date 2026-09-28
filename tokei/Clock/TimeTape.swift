@@ -2,6 +2,7 @@ import SwiftUI
 
 struct TimeTape: View {
     @Environment(SceneModel.self) private var scene
+    @Environment(\.sceneAccent) private var accent
 
     let now: Date
     let shift: Double
@@ -24,7 +25,7 @@ struct TimeTape: View {
         }
         .overlay {
             Capsule()
-                .fill(.sunlight)
+                .fill(accent)
                 .frame(width: 2.5)
                 .padding(.vertical, 2)
         }
@@ -32,6 +33,12 @@ struct TimeTape: View {
         .gesture(scrub)
         .sensoryFeedback(.selection, trigger: hourIndex) { _, _ in
             scene.isScrubbing || scene.shiftGlide != nil
+        }
+        .onChange(of: hourIndex) { old, new in
+            guard scene.isScrubbing || scene.shiftGlide != nil else { return }
+            let boundary = Date(timeIntervalSince1970: Double(max(old, new)) * 3600)
+            let local = Calendar.current.dateComponents([.hour, .minute], from: boundary)
+            scene.emit(local.hour == 0 && local.minute == 0 ? .dayTick : .tick)
         }
         .accessibilityElement()
         .accessibilityLabel("Time shift")
@@ -85,7 +92,7 @@ struct TimeTape: View {
                 var path = Path()
                 path.move(to: CGPoint(x: x, y: baseline - height))
                 path.addLine(to: CGPoint(x: x, y: baseline))
-                let color: Color = isMidnight ? .sunlight : .white
+                let color: Color = isMidnight ? accent : .white
                 let opacity = (isHour ? 0.62 : 0.26) * fade
                 context.stroke(path, with: .color(color.opacity(opacity)), style: StrokeStyle(lineWidth: isHour ? 1.5 : 1, lineCap: .round))
                 if isHour {
@@ -94,7 +101,7 @@ struct TimeTape: View {
                         : date.formatted(.dateTime.hour(.defaultDigits(amPM: .abbreviated)))
                     let text = Text(label)
                         .font(.system(size: 11, weight: isMidnight ? .semibold : .medium))
-                        .foregroundStyle(isMidnight ? Color.sunlight.opacity(fade) : Color.white.opacity(0.55 * fade))
+                        .foregroundStyle(isMidnight ? accent.opacity(fade) : Color.white.opacity(0.55 * fade))
                     context.draw(text, at: CGPoint(x: x, y: 8), anchor: .center)
                 }
             }

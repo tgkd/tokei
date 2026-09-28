@@ -1,0 +1,157 @@
+import Foundation
+import SwiftUI
+import simd
+
+struct SceneEffects: Equatable {
+    struct Press: Equatable {
+        let point: SIMD3<Double>
+        let start: Date
+        var release: Date?
+    }
+
+    struct Pop: Equatable {
+        let point: SIMD3<Double>
+        let start: Date
+    }
+
+    struct Fling: Equatable {
+        let axis: SIMD3<Double>
+        let stretch: Double
+        let start: Date
+    }
+
+    struct Snow: Equatable {
+        let epoch: Date
+        let until: Date
+    }
+
+    var press: Press?
+    var pop: Pop?
+    var fling: Fling?
+    var inflateStart: Date?
+    var snow: Snow?
+
+    var isEmpty: Bool {
+        press == nil && pop == nil && fling == nil && inflateStart == nil && snow == nil
+    }
+
+    func snapshot(at date: Date, tuning: EffectTuning) -> EffectSnapshot {
+        guard !isEmpty else { return .none }
+        var snapshot = EffectSnapshot()
+        var shape = matrix_identity_double3x3
+        if let press {
+            let amount = Self.pressAmount(press, at: date, tuning: tuning.press)
+            snapshot.dentPoint = press.point
+            snapshot.dentDepth = tuning.press.dentDepth * amount
+            snapshot.dentRadius = tuning.press.dentRadius
+            snapshot.dentShade = tuning.press.dentShade
+            snapshot.frost = tuning.press.frost * max(amount, 0)
+            snapshot.cracks = tuning.press.cracks * max(amount, 0)
+            shape = shape * Self.stretch(along: press.point, by: -tuning.press.squash * amount)
+        }
+        if let pop {
+            let age = max(date.timeIntervalSince(pop.start), 0)
+            let amount = Self.impulse(tuning.pop.spring, at: age)
+            snapshot.bumpPoint = pop.point
+            snapshot.bumpHeight = tuning.pop.height * amount
+            snapshot.bumpRadius = tuning.pop.radius
+            snapshot.glow = tuning.pop.glow * max(amount, 0)
+            if age < tuning.ripple.duration {
+                snapshot.rippleOrigin = pop.point
+                snapshot.rippleAge = age
+                snapshot.rippleTilt = tuning.ripple.tilt
+                snapshot.rippleLandShare = tuning.ripple.landShare
+                snapshot.rippleFlash = tuning.ripple.flash
+                snapshot.rippleDisplacement = tuning.ripple.displacement
+                snapshot.rippleWavelength = tuning.ripple.wavelength
+                snapshot.rippleSpeed = tuning.ripple.speed
+                snapshot.rippleDecay = tuning.ripple.decay
+            }
+        }
+        if let fling {
+            let amount = fling.stretch * Self.impulse(tuning.fling.spring, at: max(date.timeIntervalSince(fling.start), 0))
+            shape = shape * Self.stretch(along: fling.axis, by: amount)
+        }
+        if let inflateStart, let spring = tuning.inflate {
+            snapshot.inflate = spring.value(target: 1.0, time: max(date.timeIntervalSince(inflateStart), 0))
+        }
+        if let snow {
+            snapshot.snowClock = max(date.timeIntervalSince(snow.epoch), 0.001)
+        }
+        snapshot.shape = shape
+        return snapshot
+    }
+
+    func nextEnd(tuning: EffectTuning) -> Date? {
+        ends(tuning: tuning).compactMap { $0 }.min()
+    }
+
+    func settled(at date: Date, tuning: EffectTuning) -> SceneEffects {
+        var settled = self
+        if let release = press?.release, release.addingTimeInterval(tuning.press.releaseSpring.settlingDuration) <= date {
+            settled.press = nil
+        }
+        if let end = popEnd(tuning: tuning), end <= date {
+            settled.pop = nil
+        }
+        if let fling, fling.start.addingTimeInterval(tuning.fling.spring.settlingDuration) <= date {
+            settled.fling = nil
+        }
+        if let inflateStart, inflateStart.addingTimeInterval(tuning.inflate?.settlingDuration ?? 0) <= date {
+            settled.inflateStart = nil
+        }
+        if let snow, snow.until <= date {
+            settled.snow = nil
+        }
+        return settled
+    }
+
+    private func ends(tuning: EffectTuning) -> [Date?] {
+        [
+            press?.release.map { $0.addingTimeInterval(tuning.press.releaseSpring.settlingDuration) },
+            popEnd(tuning: tuning),
+            fling.map { $0.start.addingTimeInterval(tuning.fling.spring.settlingDuration) },
+            inflateStart.map { $0.addingTimeInterval(tuning.inflate?.settlingDuration ?? 0) },
+            snow?.until,
+        ]
+    }
+
+    private func popEnd(tuning: EffectTuning) -> Date? {
+        pop.map { $0.start.addingTimeInterval(max(tuning.pop.spring.settlingDuration, tuning.ripple.duration)) }
+    }
+
+    private static func pressAmount(_ press: Press, at date: Date, tuning: EffectTuning.Press) -> Double {
+        let held = max(date.timeIntervalSince(press.start), 0)
+        guard let release = press.release else {
+            return tuning.pressSpring.value(target: 1.0, time: held)
+        }
+        let heldAtRelease = max(release.timeIntervalSince(press.start), 0)
+        let amount = tuning.pressSpring.value(target: 1.0, time: heldAtRelease)
+        let velocity = tuning.pressSpring.velocity(target: 1.0, time: heldAtRelease)
+        let since = max(date.timeIntervalSince(release), 0)
+        return amount + tuning.releaseSpring.value(target: -amount, initialVelocity: velocity, time: since)
+    }
+
+    private static func impulse(_ spring: Spring, at time: Double) -> Double {
+        spring.value(target: 0.0, initialVelocity: 1.0, time: time) / impulsePeak(spring)
+    }
+
+    private static func impulsePeak(_ spring: Spring) -> Double {
+        let omega = sqrt(spring.stiffness / spring.mass)
+        let zeta = spring.damping / (2 * sqrt(spring.stiffness * spring.mass))
+        guard zeta < 1 else {
+            return max(spring.value(target: 0.0, initialVelocity: 1.0, time: 1 / omega), 1e-6)
+        }
+        let damped = omega * sqrt(1 - zeta * zeta)
+        let peakTime = atan2(damped, zeta * omega) / damped
+        return exp(-zeta * omega * peakTime) * sin(damped * peakTime) / damped
+    }
+
+    private static func stretch(along axis: SIMD3<Double>, by amount: Double) -> simd_double3x3 {
+        let direction = normalize(axis)
+        let along = max(1 + amount, 0.2)
+        let across = 1 / sqrt(along)
+        let projector = simd_double3x3(columns: (direction * direction.x, direction * direction.y, direction * direction.z))
+        return projector * along + (matrix_identity_double3x3 - projector) * across
+    }
+}

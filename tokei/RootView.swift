@@ -4,6 +4,7 @@ struct RootView: View {
     @Environment(ClockStore.self) private var store
     @Environment(SceneModel.self) private var scene
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     @State private var showsList = false
     @State private var detent: PresentationDetent = .medium
@@ -30,7 +31,7 @@ struct RootView: View {
                 }
             }
         }
-        .background(Color.space.ignoresSafeArea())
+        .background(scene.style.backdrop.ignoresSafeArea())
         .sheet(isPresented: $showsList) {
             ZoneListSheet(date: store.now.addingTimeInterval(scene.shift * 60), isShifted: scene.committedShift != 0)
                 .presentationDetents([.medium, .large], selection: $detent)
@@ -54,11 +55,19 @@ struct RootView: View {
             scene.settle(glide)
         }
         .onChange(of: scenePhase) { _, phase in
+            scene.isForeground = phase == .active
             if phase == .active {
                 store.reload()
                 scene.syncShiftFromStorage()
             }
         }
+        .onChange(of: reduceMotion, initial: true) { _, reduceMotion in
+            scene.reduceMotion = reduceMotion
+        }
+        .sensoryFeedback(trigger: scene.cue) { _, cue in
+            cue?.haptic
+        }
+        .environment(\.sceneAccent, scene.style.accent)
         .preferredColorScheme(.dark)
     }
 
@@ -68,9 +77,14 @@ struct RootView: View {
                 store.focusHome()
             }
             Spacer()
-            GlassIconButton(systemName: "list.bullet", label: "Cities") {
-                detent = .medium
-                showsList = true
+            GlassEffectContainer(spacing: 12) {
+                HStack(spacing: 12) {
+                    SceneStyleMenu()
+                    GlassIconButton(systemName: "list.bullet", label: "Cities") {
+                        detent = .medium
+                        showsList = true
+                    }
+                }
             }
         }
         .padding(.horizontal, 20)

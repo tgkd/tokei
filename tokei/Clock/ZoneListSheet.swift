@@ -2,6 +2,7 @@ import SwiftUI
 
 struct ZoneListSheet: View {
     @Environment(ClockStore.self) private var store
+    @Environment(\.sceneAccent) private var accent
 
     let date: Date
     let isShifted: Bool
@@ -21,7 +22,7 @@ struct ZoneListSheet: View {
                             showsPicker = true
                         }
                         .buttonStyle(.borderedProminent)
-                        .tint(.sunlight)
+                        .tint(accent)
                         .foregroundStyle(.black)
                     }
                 } else {

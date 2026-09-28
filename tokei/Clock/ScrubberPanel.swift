@@ -2,6 +2,7 @@ import SwiftUI
 
 struct ScrubberPanel: View {
     @Environment(SceneModel.self) private var scene
+    @Environment(\.sceneAccent) private var accent
 
     let now: Date
     let shift: Double
@@ -19,7 +20,7 @@ struct ScrubberPanel: View {
                     Text(ZoneClock.time(date, in: zone))
                         .font(.system(size: 34, weight: .semibold, design: .rounded))
                         .monospacedDigit()
-                        .foregroundStyle(minutes == 0 ? Color.white : Color.sunlight)
+                        .foregroundStyle(minutes == 0 ? Color.white : accent)
                     Text("\(ZoneClock.weekdayAndDate(date, in: zone)) · \(Zone.cityName(for: zone.identifier))")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
@@ -58,7 +59,7 @@ struct ScrubberPanel: View {
                 .foregroundStyle(.black)
                 .padding(.horizontal, 12)
                 .frame(height: 34)
-                .background(.sunlight, in: .capsule)
+                .background(accent, in: .capsule)
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Back to now")
