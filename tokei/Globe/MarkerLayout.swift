@@ -18,15 +18,15 @@ final class MarkerLayoutCache {
     var candidates: [UUID: Int] = [:]
     private var sizes: [String: CGSize] = [:]
 
-    func size(name: String, time: String, detail: String?) -> CGSize {
-        let key = [name, time, detail ?? ""].joined(separator: "|")
+    func size(name: String, time: String, detail: String?, style: SceneStyle) -> CGSize {
+        let key = [style.rawValue, name, time, detail ?? ""].joined(separator: "|")
         if let size = sizes[key] {
             return size
         }
         if sizes.count > 256 {
             sizes.removeAll()
         }
-        let size = ChipMetrics.size(name: name, time: time, detail: detail)
+        let size = ChipMetrics.size(name: name, time: time, detail: detail, style: style)
         sizes[key] = size
         return size
     }
@@ -47,7 +47,7 @@ enum MarkerLayout {
         for zone in zones {
             guard let location = zone.location else { continue }
             let unit = location.unitVector
-            let point = frame.effects.place(unit, surfaceRadius: surface?.radius(along: unit) ?? 1)
+            let point = frame.effects.place(unit, surfaceRadius: surface?.radius(along: unit, in: frame) ?? 1)
             let facing = frame.visibility(of: point)
             guard facing > 0, let anchor = frame.project(point) else { continue }
             visible.append((zone, anchor, min(facing / 0.2, 1)))
@@ -70,7 +70,7 @@ enum MarkerLayout {
             }
             texts[zone.id] = (time, detail)
             guard entry.fade > 0.45 else { continue }
-            let size = cache.size(name: zone.cityName, time: time, detail: detail)
+            let size = cache.size(name: zone.cityName, time: time, detail: detail, style: frame.style)
             requests.append(LabelRequest(id: zone.id, anchor: entry.anchor, size: size, previousCandidate: cache.candidates[zone.id]))
         }
 

@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct MarkerChip: View {
+    @Environment(\.sceneStyle) private var style
     @Environment(\.sceneAccent) private var accent
 
     let name: String
@@ -10,29 +11,34 @@ struct MarkerChip: View {
     let isShifted: Bool
 
     var body: some View {
-        VStack(alignment: .leading, spacing: ChipMetrics.lineSpacing) {
-            HStack(spacing: ChipMetrics.spacing) {
-                Text(name)
-                    .font(Font(ChipMetrics.nameFont))
-                    .foregroundStyle(.white)
+        let chip = style.interface.chip
+        let fonts = ChipMetrics.fonts(for: style)
+        let filled = isSelected ? chip.selectedSurface : nil
+        let ink = filled == nil ? nil : chip.selectedInk
+        VStack(alignment: .leading, spacing: chip.lineSpacing) {
+            HStack(spacing: chip.spacing) {
+                Text(ChipMetrics.displayName(name, style: style))
+                    .font(Font(fonts.name))
+                    .foregroundStyle(ink ?? chip.nameColor)
                 Text(time)
-                    .font(Font(ChipMetrics.timeFont))
-                    .foregroundStyle(isShifted ? accent : Color.white.opacity(0.72))
+                    .font(Font(fonts.time))
+                    .foregroundStyle(ink ?? (isShifted ? chip.shiftedTimeColor ?? accent : chip.timeColor))
             }
             if let detail {
                 Text(detail)
-                    .font(Font(ChipMetrics.detailFont))
-                    .foregroundStyle(.white.opacity(0.6))
+                    .font(Font(fonts.detail))
+                    .foregroundStyle(ink ?? chip.detailColor)
             }
         }
         .lineLimit(1)
         .fixedSize()
-        .padding(.horizontal, ChipMetrics.horizontalPadding)
-        .padding(.vertical, ChipMetrics.verticalPadding)
-        .background(.black.opacity(0.56), in: .rect(cornerRadius: detail == nil ? 13 : 11))
-        .overlay {
-            RoundedRectangle(cornerRadius: detail == nil ? 13 : 11)
-                .strokeBorder(isSelected ? accent.opacity(0.9) : Color.white.opacity(0.14), lineWidth: isSelected ? 1 : 0.5)
-        }
+        .padding(.horizontal, chip.horizontalPadding)
+        .padding(.vertical, chip.verticalPadding)
+        .surface(
+            filled ?? chip.surface,
+            in: RoundedRectangle(cornerRadius: chip.corner, style: .continuous),
+            outline: isSelected && filled == nil ? accent : nil,
+            outlineWidth: 1.25
+        )
     }
 }

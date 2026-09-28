@@ -1,8 +1,44 @@
 import AVFoundation
 
-enum SoundTimbre: CaseIterable {
-    case soft
-    case glass
+struct SoundTimbre: Hashable, Sendable {
+    let id: String
+    let shape: @Sendable (FeedbackCue.Kind, SoundSynth.Voice) -> SoundSynth.Voice
+    let design: (@Sendable (FeedbackCue.Kind, inout SoundSynth.Random) -> SoundSynth.Design?)?
+    private let counts: [FeedbackCue.Kind: Int]
+
+    init(id: String, shape: @escaping @Sendable (FeedbackCue.Kind, SoundSynth.Voice) -> SoundSynth.Voice) {
+        self.id = id
+        self.shape = shape
+        design = nil
+        counts = [:]
+    }
+
+    init(id: String, variants: [FeedbackCue.Kind: Int], design: @escaping @Sendable (FeedbackCue.Kind, inout SoundSynth.Random) -> SoundSynth.Design?) {
+        self.id = id
+        shape = { _, voice in voice }
+        self.design = design
+        counts = variants
+    }
+
+    func variants(of kind: FeedbackCue.Kind) -> Int {
+        counts[kind] ?? SoundSynth.variants(of: kind)
+    }
+
+    static func == (lhs: SoundTimbre, rhs: SoundTimbre) -> Bool {
+        lhs.id == rhs.id
+    }
+
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(id)
+    }
+
+    func seed(kind: Int, variant: Int) -> UInt64 {
+        var hash: UInt64 = 0xCBF2_9CE4_8422_2325
+        for byte in id.utf8 {
+            hash = (hash ^ UInt64(byte)) &* 0x100_0000_01B3
+        }
+        return hash ^ (UInt64(kind) << 32) ^ UInt64(variant)
+    }
 }
 
 enum SoundSynth {
@@ -20,6 +56,9 @@ enum SoundSynth {
         var overtone: Double
         var noise = 0.0
         var bell = 0.0
+        var spread = 1.0
+        var jitter = 0.0
+        var hiss = 0.0
 
         func frequency(at time: Double) -> Double {
             let base = endFrequency + (startFrequency - endFrequency) * exp(-time / glide)
@@ -36,38 +75,44 @@ enum SoundSynth {
 
         func varied(by amount: Double) -> Voice {
             var voice = self
-            voice.startFrequency *= 1 + 0.05 * amount
-            voice.endFrequency *= 1 + 0.05 * amount
-            voice.decay *= 1 + 0.1 * amount
+            voice.startFrequency *= 1 + 0.05 * spread * amount
+            voice.endFrequency *= 1 + 0.05 * spread * amount
+            voice.decay *= 1 + 0.1 * spread * amount
             return voice
         }
     }
 
-    static let variants = 8
+    struct Design {
+        var layers: [any SoundLayer]
+        var level: Double
+        var floor = 150.0
+    }
 
-    static func library(format: AVAudioFormat, timbre: SoundTimbre) -> [FeedbackCue.Kind: [AVAudioPCMBuffer]] {
-        var library: [FeedbackCue.Kind: [AVAudioPCMBuffer]] = [:]
-        for kind in FeedbackCue.Kind.allCases {
-            library[kind] = (0..<variants).compactMap { _ in
-                render(voice(for: kind, timbre: timbre).varied(by: Double.random(in: -1...1)), format: format)
+    static let variants = 8
+    static let ceiling = 0.7
+    private static let rapidVariants: [FeedbackCue.Kind: Int] = [.tick: 12, .carve: 16]
+
+    static func variants(of kind: FeedbackCue.Kind) -> Int {
+        rapidVariants[kind] ?? variants
+    }
+
+    static func samples(timbre: SoundTimbre, rate: Double) -> [FeedbackCue.Kind: [[Float]]] {
+        var library: [FeedbackCue.Kind: [[Float]]] = [:]
+        for (index, kind) in FeedbackCue.Kind.allCases.enumerated() {
+            library[kind] = (0..<timbre.variants(of: kind)).map { variant in
+                var random = Random(seed: timbre.seed(kind: index, variant: variant))
+                if let design = timbre.design?(kind, &random) {
+                    return render(design, rate: rate, random: &random)
+                }
+                let voice = voice(for: kind, timbre: timbre).varied(by: random.signed())
+                return waveform(voice, rate: rate, random: &random).map(Float.init)
             }
         }
         return library
     }
 
     static func voice(for kind: FeedbackCue.Kind, timbre: SoundTimbre) -> Voice {
-        var voice = voice(for: kind)
-        if timbre == .glass {
-            voice.startFrequency *= 2.2
-            voice.endFrequency *= 2.2
-            voice.decay *= 1.6
-            voice.duration = min(voice.duration * 1.6, 0.6)
-            voice.overtone = 0.2
-            voice.bell = 0.45
-            voice.gain *= 0.8
-            voice.noise *= 0.5
-        }
-        return voice
+        timbre.shape(kind, voice(for: kind))
     }
 
     static func voice(for kind: FeedbackCue.Kind) -> Voice {
@@ -86,24 +131,86 @@ enum SoundSynth {
             Voice(startFrequency: 1500, endFrequency: 1400, glide: 0.02, attack: 0.0005, decay: 0.01, duration: 0.05, gain: 0.22, overtone: 0.6, noise: 0.3)
         case .inflate:
             Voice(startFrequency: 90, endFrequency: 260, glide: 0.12, attack: 0.03, decay: 0.16, duration: 0.45, gain: 0.35, overtone: 0.3)
+        case .carve:
+            Voice(startFrequency: 640, endFrequency: 440, glide: 0.02, vibratoDepth: 0.1, vibratoRate: 65, vibratoDecay: 0.05, attack: 0.003, decay: 0.016, duration: 0.06, gain: 0.13, overtone: 0.4, noise: 0.15, spread: 3, jitter: 0.008, hiss: 1)
         }
     }
 
-    static func render(_ voice: Voice, format: AVAudioFormat) -> AVAudioPCMBuffer? {
-        let rate = format.sampleRate
-        let frames = AVAudioFrameCount(voice.duration * rate)
-        guard
-            let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frames),
-            let samples = buffer.floatChannelData?[0]
-        else { return nil }
-        buffer.frameLength = frames
+    static func waveform(_ voice: Voice, rate: Double, random: inout Random) -> [Double] {
+        let delay = voice.jitter > 0 ? Int(voice.jitter * random.unit() * rate) : 0
+        let count = Int(voice.duration * rate)
+        var samples = [Double](repeating: 0, count: delay + count)
         var phase = 0.0
-        for index in 0..<Int(frames) {
+        var rub = 0.0
+        for index in 0..<count {
             let time = Double(index) / rate
             phase += 2 * .pi * voice.frequency(at: time) / rate
             let tone = sin(phase) + voice.overtone * sin(2 * phase) + voice.bell * sin(2.76 * phase)
-            let noise = voice.noise * Double.random(in: -1...1) * exp(-time / 0.004)
-            samples[index] = Float((tone + noise) * voice.envelope(at: time) * voice.gain)
+            let noise = voice.noise * random.signed() * exp(-time / 0.004)
+            if voice.hiss > 0 {
+                rub += (random.signed() - rub) * 0.3
+            }
+            samples[delay + index] = (tone + noise + voice.hiss * rub) * voice.envelope(at: time) * voice.gain
+        }
+        return samples
+    }
+
+    static func render(_ design: Design, rate: Double, random: inout Random) -> [Float] {
+        var mix = [Double](repeating: 0, count: max(Int((design.layers.map(\.end).max() ?? 0) * rate), 1))
+        mix.withUnsafeMutableBufferPointer { buffer in
+            for layer in design.layers {
+                layer.add(into: buffer, rate: rate, random: &random)
+            }
+        }
+        var floor = Biquad.highPass(frequency: design.floor, resonance: 0.707, rate: rate)
+        for index in mix.indices {
+            mix[index] = floor.process(mix[index])
+        }
+        let peak = mix.reduce(0) { max($0, abs($1)) }
+        guard peak > 0 else { return [0] }
+        let gain = min(pow(10, (design.level - loudness(mix, rate: rate)) / 20), 1.6 * ceiling / peak)
+        let end = (mix.lastIndex { abs($0) > peak * 0.003 } ?? 0) + 1
+        let fade = Double(min(Int(0.004 * rate), end))
+        return (0..<end).map { index in
+            Float(limited(mix[index] * gain) * min(Double(end - index) / fade, 1))
+        }
+    }
+
+    private static func limited(_ sample: Double) -> Double {
+        let knee = 0.45
+        let magnitude = abs(sample)
+        guard magnitude > knee else { return sample }
+        let room = ceiling - knee
+        return (knee + room * tanh((magnitude - knee) / room)) * (sample < 0 ? -1 : 1)
+    }
+
+    static func loudness(_ samples: [Double], rate: Double) -> Double {
+        var weighting = Biquad.highPass(frequency: 400, resonance: 0.707, rate: rate)
+        let window = max(Int(0.05 * rate), 1)
+        var squares = [Double](repeating: 0, count: samples.count)
+        var energy = 0.0
+        var loudest = 0.0
+        for index in samples.indices {
+            let weighted = weighting.process(samples[index])
+            squares[index] = weighted * weighted
+            energy += squares[index]
+            if index >= window {
+                energy -= squares[index - window]
+            }
+            loudest = max(loudest, energy)
+        }
+        return 10 * log10(max(loudest / Double(window), 1e-12))
+    }
+
+    static func buffer(_ samples: [Float], format: AVAudioFormat) -> AVAudioPCMBuffer? {
+        guard
+            let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: AVAudioFrameCount(samples.count)),
+            let channel = buffer.floatChannelData?[0]
+        else { return nil }
+        buffer.frameLength = AVAudioFrameCount(samples.count)
+        samples.withUnsafeBufferPointer { source in
+            guard let base = source.baseAddress else { return }
+            channel.update(from: base, count: source.count)
         }
         return buffer
     }

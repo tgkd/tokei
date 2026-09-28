@@ -3,6 +3,8 @@ import SwiftUI
 struct ScrubberPanel: View {
     @Environment(SceneModel.self) private var scene
     @Environment(\.sceneAccent) private var accent
+    @Environment(\.sceneStyle) private var style
+    @ScaledMetric(relativeTo: .largeTitle) private var timeSize: CGFloat = 34
 
     let now: Date
     let shift: Double
@@ -12,22 +14,27 @@ struct ScrubberPanel: View {
     }
 
     var body: some View {
+        let interface = style.interface
+        let typography = interface.typography
         let date = now.addingTimeInterval(shift * 60)
         let zone = TimeZone.current
         VStack(spacing: 10) {
             HStack(alignment: .center, spacing: 12) {
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(ZoneClock.time(date, in: zone))
-                        .font(.system(size: 34, weight: .semibold, design: .rounded))
-                        .monospacedDigit()
-                        .foregroundStyle(minutes == 0 ? Color.white : accent)
+                VStack(alignment: .leading, spacing: 2) {
+                    DisplayTime(date: date, zone: zone, font: typography.display(size: timeSize), periodFont: typography.period(size: timeSize * 0.5))
+                        .foregroundStyle(minutes == 0 ? interface.ink : accent)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.6)
                     Text("\(ZoneClock.weekdayAndDate(date, in: zone)) · \(Zone.cityName(for: zone.identifier))")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
+                        .font(typography.caption(.footnote))
+                        .textCase(typography.captionCase)
+                        .tracking(typography.captionTracking)
+                        .foregroundStyle(interface.secondaryInk)
                         .lineLimit(1)
                 }
+                .engraved(typography.engraved)
                 Spacer(minLength: 8)
-                trailing
+                trailing(interface)
             }
             TimeTape(now: now, shift: shift)
                 .frame(height: 46)
@@ -35,15 +42,16 @@ struct ScrubberPanel: View {
         .padding(.horizontal, 18)
         .padding(.top, 14)
         .padding(.bottom, 10)
-        .glassEffect(.regular, in: .rect(cornerRadius: 30))
+        .surface(interface.panel, in: .rect(cornerRadius: interface.panelCorner, style: .continuous))
+        .dynamicTypeSize(...DynamicTypeSize.accessibility2)
     }
 
     @ViewBuilder
-    private var trailing: some View {
+    private func trailing(_ interface: InterfaceLook) -> some View {
         if minutes == 0 {
             Text("Now")
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(.secondary)
+                .font(interface.typography.title(.subheadline))
+                .foregroundStyle(interface.secondaryInk)
                 .frame(height: 36)
         } else {
             Button {
@@ -55,13 +63,15 @@ struct ScrubberPanel: View {
                     Image(systemName: "arrow.uturn.backward")
                         .font(.caption.weight(.bold))
                 }
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(.black)
+                .font(interface.typography.title(.subheadline))
+                .foregroundStyle(interface.onAccent)
                 .padding(.horizontal, 12)
                 .frame(height: 34)
-                .background(accent, in: .capsule)
+                .contentShape(.capsule)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(SurfaceButtonStyle(surface: interface.accentSurface, shape: Capsule()))
+            .frame(minHeight: 44)
+            .contentShape(.rect)
             .accessibilityLabel("Back to now")
         }
     }

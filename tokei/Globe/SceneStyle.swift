@@ -4,6 +4,8 @@ enum SceneStyle: String, CaseIterable, Identifiable {
     case realistic
     case toy
     case ice
+    case chrome
+    case paper
 
     private static let defaultsKey = "scene_style"
 
@@ -11,57 +13,42 @@ enum SceneStyle: String, CaseIterable, Identifiable {
         rawValue
     }
 
+    var look: SceneLook {
+        switch self {
+        case .realistic: .realistic
+        case .toy: .toy
+        case .ice: .ice
+        case .chrome: .chrome
+        case .paper: .paper
+        }
+    }
+
     var displayName: String {
-        switch self {
-        case .realistic: "Realistic"
-        case .toy: "Toy"
-        case .ice: "Ice"
-        }
+        look.name
     }
 
-    var toyPalette: ToyPalette? {
-        switch self {
-        case .realistic: nil
-        case .toy: .standard
-        case .ice: .ice
-        }
-    }
-
-    var toyMaterial: ToyMaterial {
-        switch self {
-        case .realistic, .toy: .standard
-        case .ice: .ice
-        }
-    }
-
-    var toyShape: ToyShape {
-        switch self {
-        case .realistic, .toy: .puffy
-        case .ice: .glacier
-        }
+    var mesh: MeshLook? {
+        look.mesh
     }
 
     var usesMesh: Bool {
-        toyPalette != nil
+        look.mesh != nil
     }
 
     var soundTimbre: SoundTimbre? {
-        switch self {
-        case .realistic: nil
-        case .toy: .soft
-        case .ice: .glass
-        }
+        look.sound
     }
 
     var backdrop: Color {
-        toyPalette?.backdropColor ?? .space
+        look.backdropColor
     }
 
     var accent: Color {
-        switch self {
-        case .realistic, .toy: .sunlight
-        case .ice: Color(red: 0.62, green: 0.745, blue: 0.867)
-        }
+        look.accent
+    }
+
+    var effects: EffectTuning {
+        look.effects
     }
 
     static func load() -> SceneStyle {

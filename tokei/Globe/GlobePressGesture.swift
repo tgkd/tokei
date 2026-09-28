@@ -2,14 +2,16 @@ import SwiftUI
 import UIKit
 
 struct GlobePressGesture: UIGestureRecognizerRepresentable {
-    let onPress: (CGPoint) -> Void
-    let onRelease: (_ moved: Bool) -> Void
+    enum Event {
+        case began(CGPoint)
+        case moved(CGPoint)
+        case crowded
+        case ended(CGPoint)
+    }
 
-    private static let movementTolerance = 10.0
+    let onEvent: (Event) -> Void
 
     final class Coordinator: NSObject, UIGestureRecognizerDelegate {
-        var origin: CGPoint?
-
         func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer) -> Bool {
             true
         }
@@ -34,12 +36,11 @@ struct GlobePressGesture: UIGestureRecognizerRepresentable {
         let location = context.converter.localLocation
         switch recognizer.state {
         case .began:
-            context.coordinator.origin = location
-            onPress(location)
+            onEvent(.began(location))
+        case .changed:
+            onEvent(recognizer.numberOfTouches > 1 ? .crowded : .moved(location))
         case .ended, .cancelled:
-            let origin = context.coordinator.origin ?? location
-            context.coordinator.origin = nil
-            onRelease(hypot(location.x - origin.x, location.y - origin.y) > Self.movementTolerance)
+            onEvent(.ended(location))
         default:
             break
         }

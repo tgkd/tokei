@@ -3,6 +3,7 @@ import SwiftUI
 struct TimeTape: View {
     @Environment(SceneModel.self) private var scene
     @Environment(\.sceneAccent) private var accent
+    @Environment(\.sceneStyle) private var style
 
     let now: Date
     let shift: Double
@@ -20,14 +21,12 @@ struct TimeTape: View {
     }
 
     var body: some View {
+        let tape = style.interface.tape
         Canvas { context, size in
-            drawTicks(in: context, size: size)
+            drawTicks(in: context, size: size, tape: tape)
         }
         .overlay {
-            Capsule()
-                .fill(accent)
-                .frame(width: 2.5)
-                .padding(.vertical, 2)
+            TapeNeedle()
         }
         .contentShape(Rectangle())
         .gesture(scrub)
@@ -70,7 +69,7 @@ struct TimeTape: View {
             }
     }
 
-    private func drawTicks(in context: GraphicsContext, size: CGSize) {
+    private func drawTicks(in context: GraphicsContext, size: CGSize, tape: TapeLook) {
         let zone = TimeZone.current
         let center = size.width / 2
         let needle = displayDate.timeIntervalSince1970
@@ -92,16 +91,18 @@ struct TimeTape: View {
                 var path = Path()
                 path.move(to: CGPoint(x: x, y: baseline - height))
                 path.addLine(to: CGPoint(x: x, y: baseline))
-                let color: Color = isMidnight ? accent : .white
+                let color: Color = isMidnight ? accent : tape.tick
                 let opacity = (isHour ? 0.62 : 0.26) * fade
-                context.stroke(path, with: .color(color.opacity(opacity)), style: StrokeStyle(lineWidth: isHour ? 1.5 : 1, lineCap: .round))
+                let cap: CGLineCap = tape.squareCaps ? .butt : .round
+                context.stroke(path, with: .color(color.opacity(opacity)), style: StrokeStyle(lineWidth: isHour ? tape.hourWidth : tape.quarterWidth, lineCap: cap))
                 if isHour {
                     let label = isMidnight
                         ? date.formatted(.dateTime.weekday(.abbreviated))
                         : date.formatted(.dateTime.hour(.defaultDigits(amPM: .abbreviated)))
+                    let clearance = min(1, max(0, (abs(x - center) - 10) / 14))
                     let text = Text(label)
-                        .font(.system(size: 11, weight: isMidnight ? .semibold : .medium))
-                        .foregroundStyle(isMidnight ? accent.opacity(fade) : Color.white.opacity(0.55 * fade))
+                        .font(.system(size: 11, weight: isMidnight ? .bold : tape.labelWeight, design: tape.labelDesign))
+                        .foregroundStyle(isMidnight ? accent.opacity(fade * clearance) : tape.label.opacity(fade * clearance))
                     context.draw(text, at: CGPoint(x: x, y: 8), anchor: .center)
                 }
             }

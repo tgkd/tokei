@@ -44,4 +44,22 @@ final class WobbleHaptics {
         try? engine.start()
         try? player.start(atTime: CHHapticTimeImmediate)
     }
+
+    func tick(intensity: Float, sharpness: Float) {
+        guard let engine else { return }
+        let event = CHHapticEvent(
+            eventType: .hapticTransient,
+            parameters: [
+                CHHapticEventParameter(parameterID: .hapticIntensity, value: intensity),
+                CHHapticEventParameter(parameterID: .hapticSharpness, value: sharpness),
+            ],
+            relativeTime: 0
+        )
+        guard
+            let pattern = try? CHHapticPattern(events: [event], parameters: []),
+            let player = try? engine.makePlayer(with: pattern)
+        else { return }
+        try? engine.start()
+        try? player.start(atTime: CHHapticTimeImmediate)
+    }
 }

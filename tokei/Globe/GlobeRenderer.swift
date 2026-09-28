@@ -16,14 +16,17 @@ struct GlobeUniforms {
 final class GlobeRenderer {
     static let pixelFormat: MTLPixelFormat = .bgra8Unorm
     static let exposure: Float = 4.5
-    static let toySampleCount = 4
+    static let meshSampleCount = 4
 
     let device: MTLDevice
-    private let queue: MTLCommandQueue
+    let queue: MTLCommandQueue
     private let pipeline: MTLRenderPipelineState
     private let effectsPipeline: MTLRenderPipelineState
-    private let toyPipeline: MTLRenderPipelineState
-    private let toyDepthState: MTLDepthStencilState
+    private let meshPipelines: [String: MTLRenderPipelineState]
+    private let backgroundPipelines: [String: MTLRenderPipelineState]
+    private let meshDepthState: MTLDepthStencilState
+    private let backgroundDepthState: MTLDepthStencilState
+    private let reliefPipeline: MTLComputePipelineState
     private let surfaceSampler: MTLSamplerState
     private let lutSampler: MTLSamplerState
     private let transmittance: MTLTexture
@@ -31,19 +34,18 @@ final class GlobeRenderer {
     private(set) var textures: GlobeTextures?
     private(set) var toyMesh: ToyMesh?
     let snowCover: SnowCover?
-    private var toyTargets: (color: MTLTexture, depth: MTLTexture)?
+    private var meshTargets: (color: MTLTexture, depth: MTLTexture)?
 
-    init?() {
+    init?(device: MTLDevice? = MTLCreateSystemDefaultDevice(), library: MTLLibrary? = nil) {
         guard
-            let device = MTLCreateSystemDefaultDevice(),
+            let device,
             let queue = device.makeCommandQueue(),
-            let library = device.makeDefaultLibrary(),
+            let library = library ?? device.makeDefaultLibrary(),
             let vertexFunction = library.makeFunction(name: "globeVertex"),
             let fragmentFunction = Self.realisticFragment(in: library, effects: false),
             let effectsFragmentFunction = Self.realisticFragment(in: library, effects: true),
-            let toyVertexFunction = library.makeFunction(name: "toyVertex"),
-            let toyFragmentFunction = library.makeFunction(name: "globeFragmentToyMesh"),
-
+            let meshVertexFunction = library.makeFunction(name: "meshVertex"),
+            let reliefKernel = library.makeFunction(name: "reliefKernel"),
             let kernel = library.makeFunction(name: "transmittanceKernel")
         else { return nil }
 
@@ -57,12 +59,33 @@ final class GlobeRenderer {
         effectsDescriptor.fragmentFunction = effectsFragmentFunction
         effectsDescriptor.colorAttachments[0].pixelFormat = Self.pixelFormat
 
-        let toyDescriptor = MTLRenderPipelineDescriptor()
-        toyDescriptor.vertexFunction = toyVertexFunction
-        toyDescriptor.fragmentFunction = toyFragmentFunction
-        toyDescriptor.colorAttachments[0].pixelFormat = Self.pixelFormat
-        toyDescriptor.depthAttachmentPixelFormat = .depth32Float
-        toyDescriptor.rasterSampleCount = Self.toySampleCount
+        var meshPipelines: [String: MTLRenderPipelineState] = [:]
+        for fragment in Set(SceneStyle.allCases.compactMap(\.mesh?.fragment)) {
+            let meshDescriptor = MTLRenderPipelineDescriptor()
+            meshDescriptor.vertexFunction = meshVertexFunction
+            meshDescriptor.fragmentFunction = library.makeFunction(name: fragment)
+            meshDescriptor.colorAttachments[0].pixelFormat = Self.pixelFormat
+            meshDescriptor.depthAttachmentPixelFormat = .depth32Float
+            meshDescriptor.rasterSampleCount = Self.meshSampleCount
+            guard meshDescriptor.fragmentFunction != nil, let state = try? device.makeRenderPipelineState(descriptor: meshDescriptor) else { return nil }
+            meshPipelines[fragment] = state
+        }
+
+        var backgroundPipelines: [String: MTLRenderPipelineState] = [:]
+        for fragment in Set(SceneStyle.allCases.compactMap(\.mesh?.background)) {
+            let backgroundDescriptor = MTLRenderPipelineDescriptor()
+            backgroundDescriptor.vertexFunction = vertexFunction
+            backgroundDescriptor.fragmentFunction = library.makeFunction(name: fragment)
+            backgroundDescriptor.colorAttachments[0].pixelFormat = Self.pixelFormat
+            backgroundDescriptor.depthAttachmentPixelFormat = .depth32Float
+            backgroundDescriptor.rasterSampleCount = Self.meshSampleCount
+            guard backgroundDescriptor.fragmentFunction != nil, let state = try? device.makeRenderPipelineState(descriptor: backgroundDescriptor) else { return nil }
+            backgroundPipelines[fragment] = state
+        }
+
+        let backgroundDepth = MTLDepthStencilDescriptor()
+        backgroundDepth.depthCompareFunction = .always
+        backgroundDepth.isDepthWriteEnabled = false
 
         let depth = MTLDepthStencilDescriptor()
         depth.depthCompareFunction = .less
@@ -92,8 +115,9 @@ final class GlobeRenderer {
         guard
             let pipeline = try? device.makeRenderPipelineState(descriptor: descriptor),
             let effectsPipeline = try? device.makeRenderPipelineState(descriptor: effectsDescriptor),
-            let toyPipeline = try? device.makeRenderPipelineState(descriptor: toyDescriptor),
-            let toyDepthState = device.makeDepthStencilState(descriptor: depth),
+            let meshDepthState = device.makeDepthStencilState(descriptor: depth),
+            let backgroundDepthState = device.makeDepthStencilState(descriptor: backgroundDepth),
+            let reliefPipeline = try? device.makeComputePipelineState(function: reliefKernel),
             let compute = try? device.makeComputePipelineState(function: kernel),
             let surfaceSampler = device.makeSamplerState(descriptor: surface),
             let lutSampler = device.makeSamplerState(descriptor: lookup),
@@ -119,8 +143,11 @@ final class GlobeRenderer {
         snowCover = SnowCover(device: device)
         self.pipeline = pipeline
         self.effectsPipeline = effectsPipeline
-        self.toyPipeline = toyPipeline
-        self.toyDepthState = toyDepthState
+        self.meshPipelines = meshPipelines
+        self.backgroundPipelines = backgroundPipelines
+        self.meshDepthState = meshDepthState
+        self.backgroundDepthState = backgroundDepthState
+        self.reliefPipeline = reliefPipeline
         self.surfaceSampler = surfaceSampler
         self.lutSampler = lutSampler
         self.transmittance = transmittance
@@ -131,47 +158,75 @@ final class GlobeRenderer {
         textures != nil
     }
 
-    func loadTextures() async {
+    func loadTextures(resources: GlobeResources = .main, style: SceneStyle = .load()) async {
         guard textures == nil else { return }
         let device = device
         let queue = queue
-        async let loadedTextures = Task.detached(priority: .userInitiated) {
-            GlobeTextures.load(device: device, queue: queue)
+        let first = style.mesh?.shape
+        let loadedMesh = Task.detached(priority: first == nil ? .utility : .userInitiated) {
+            ToyMesh.load(device: device, queue: queue, resources: resources, first: first)
+        }
+        let loadedTextures = await Task.detached(priority: .userInitiated) {
+            GlobeTextures.load(device: device, queue: queue, resources: resources)
         }.value
-        async let loadedMesh = Task.detached(priority: .userInitiated) {
-            ToyMesh.load(device: device, queue: queue)
-        }.value
-        let (textures, mesh) = await (loadedTextures, loadedMesh)
+        if first == nil {
+            textures = loadedTextures
+            Task {
+                attach(await loadedMesh.value, first: nil)
+            }
+        } else {
+            attach(await loadedMesh.value, first: first)
+            textures = loadedTextures
+        }
+    }
+
+    private func attach(_ mesh: ToyMesh?, first: ToyShape?) {
+        guard let mesh else { return }
         toyMesh = mesh
-        self.textures = textures
+        if let first, let shape = mesh.shapes[first], let commandBuffer = queue.makeCommandBuffer() {
+            encodeRelief(shape, of: mesh, commandBuffer: commandBuffer)
+            mesh.markRelief(first)
+            commandBuffer.commit()
+        }
+        Task {
+            await completeShapes(of: mesh)
+        }
+    }
+
+    private func completeShapes(of mesh: ToyMesh) async {
+        guard let terrain = mesh.terrain else { return }
+        let device = device
+        for key in ToyShape.allCases where mesh.shapes[key] == nil {
+            let shape = await Task.detached(priority: .utility) {
+                terrain.shape(key, device: device)
+            }.value
+            if let shape {
+                mesh.add(shape, for: key, device: device)
+            }
+        }
+        mesh.finishBuilding()
     }
 
     func draw(_ frame: GlobeFrame, reveal: Float, scale: CGFloat, to layer: CAMetalLayer) {
         guard
             let drawable = layer.nextDrawable(),
-            let commandBuffer = queue.makeCommandBuffer()
+            let commandBuffer = queue.makeCommandBuffer(),
+            encode(frame, reveal: reveal, scale: Float(scale), into: drawable.texture, commandBuffer: commandBuffer)
         else { return }
-
-        var uniforms = makeUniforms(frame, reveal: textures == nil ? 0 : reveal, scale: Float(scale))
-        var effects = frame.effects.uniforms
-        let encoded = if let palette = frame.style.toyPalette {
-            encodeToy(
-                uniforms: &uniforms,
-                effects: &effects,
-                palette: palette,
-                material: frame.style.toyMaterial,
-                shape: frame.style.toyShape,
-                into: drawable.texture,
-                commandBuffer: commandBuffer
-            )
-        } else {
-            encodeRealistic(uniforms: &uniforms, effects: &effects, into: drawable.texture, commandBuffer: commandBuffer)
-        }
-        guard encoded else { return }
 
         commandBuffer.commit()
         commandBuffer.waitUntilScheduled()
         drawable.present()
+    }
+
+    func encode(_ frame: GlobeFrame, reveal: Float, scale: Float, into target: MTLTexture, commandBuffer: MTLCommandBuffer) -> Bool {
+        var uniforms = makeUniforms(frame, reveal: textures == nil ? 0 : reveal, scale: scale)
+        var effects = frame.effects.uniforms
+        let look = frame.style.look
+        if let mesh = look.mesh {
+            return encodeMesh(mesh, frame: frame, clearColor: look.clearColor, uniforms: &uniforms, effects: &effects, into: target, commandBuffer: commandBuffer)
+        }
+        return encodeRealistic(uniforms: &uniforms, effects: &effects, into: target, commandBuffer: commandBuffer)
     }
 
     private func encodeRealistic(uniforms: inout GlobeUniforms, effects: inout EffectUniforms, into target: MTLTexture, commandBuffer: MTLCommandBuffer) -> Bool {
@@ -188,6 +243,8 @@ final class GlobeRenderer {
         encoder.setFragmentTexture(textures?.lights ?? placeholder, index: 1)
         encoder.setFragmentTexture(textures?.water ?? placeholder, index: 2)
         encoder.setFragmentTexture(transmittance, index: 3)
+        encoder.setFragmentTexture(textures?.clouds ?? placeholder, index: 4)
+        encoder.setFragmentTexture(textures?.relief ?? placeholder, index: 5)
         encoder.setFragmentSamplerState(surfaceSampler, index: 0)
         encoder.setFragmentSamplerState(lutSampler, index: 1)
         encoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 3)
@@ -195,23 +252,26 @@ final class GlobeRenderer {
         return true
     }
 
-    private func encodeToy(
+    private func encodeMesh(
+        _ look: MeshLook,
+        frame: GlobeFrame,
+        clearColor: MTLClearColor,
         uniforms: inout GlobeUniforms,
         effects: inout EffectUniforms,
-        palette: ToyPalette,
-        material: ToyMaterial,
-        shape: ToyShape,
         into target: MTLTexture,
         commandBuffer: MTLCommandBuffer
     ) -> Bool {
-        guard let targets = toyTargets(matching: target) else { return false }
-        var palette = palette
-        var material = material
+        guard let targets = meshTargets(matching: target) else { return false }
+        let selected = toyMesh?.shape(for: look.shape)
+        if let mesh = toyMesh, let selected, mesh.reliefShape != selected.key {
+            encodeRelief(selected.shape, of: mesh, commandBuffer: commandBuffer)
+            mesh.markRelief(selected.key)
+        }
         let pass = MTLRenderPassDescriptor()
         pass.colorAttachments[0].texture = targets.color
         pass.colorAttachments[0].resolveTexture = target
         pass.colorAttachments[0].loadAction = .clear
-        pass.colorAttachments[0].clearColor = palette.clearColor
+        pass.colorAttachments[0].clearColor = clearColor
         pass.colorAttachments[0].storeAction = .multisampleResolve
         pass.depthAttachment.texture = targets.depth
         pass.depthAttachment.loadAction = .clear
@@ -219,46 +279,95 @@ final class GlobeRenderer {
         pass.depthAttachment.storeAction = .dontCare
 
         guard let encoder = commandBuffer.makeRenderCommandEncoder(descriptor: pass) else { return false }
-        if let mesh = toyMesh, let meshShape = mesh.shapes[shape], let textures {
-            encoder.setRenderPipelineState(toyPipeline)
-            encoder.setDepthStencilState(toyDepthState)
+        if let name = look.background, let background = backgroundPipelines[name] {
+            encoder.setRenderPipelineState(background)
+            encoder.setDepthStencilState(backgroundDepthState)
+            encoder.setFragmentBytes(&uniforms, length: MemoryLayout<GlobeUniforms>.stride, index: 0)
+            look.parameters.withUnsafeBytes { bytes in
+                encoder.setFragmentBytes(bytes.baseAddress!, length: bytes.count, index: 1)
+            }
+            encoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 3)
+        }
+        if let mesh = toyMesh, let shape = selected?.shape, let textures, let pipeline = meshPipelines[look.fragment] {
+            encoder.setRenderPipelineState(pipeline)
+            encoder.setDepthStencilState(meshDepthState)
             encoder.setFrontFacing(.counterClockwise)
             encoder.setCullMode(.back)
             encoder.setVertexBytes(&uniforms, length: MemoryLayout<GlobeUniforms>.stride, index: 0)
-            encoder.setVertexBuffer(meshShape.vertices, offset: 0, index: 1)
             encoder.setVertexBytes(&effects, length: MemoryLayout<EffectUniforms>.stride, index: 2)
+            encoder.setVertexBuffer(shape.surface.coast.buffer, offset: 0, index: 4)
+            encoder.setVertexBuffer(shape.surface.lift.buffer, offset: 0, index: 5)
+            encoder.setVertexBuffer(shape.profile, offset: 0, index: 6)
             encoder.setFragmentBytes(&uniforms, length: MemoryLayout<GlobeUniforms>.stride, index: 0)
-            encoder.setFragmentBytes(&palette, length: MemoryLayout<ToyPalette>.stride, index: 1)
+            look.parameters.withUnsafeBytes { bytes in
+                encoder.setFragmentBytes(bytes.baseAddress!, length: bytes.count, index: 1)
+            }
             encoder.setFragmentBytes(&effects, length: MemoryLayout<EffectUniforms>.stride, index: 2)
-            encoder.setFragmentBytes(&material, length: MemoryLayout<ToyMaterial>.stride, index: 3)
             encoder.setFragmentTexture(textures.day, index: 0)
             encoder.setFragmentTexture(textures.lights, index: 1)
-            encoder.setFragmentTexture(mesh.ocean, index: 2)
-            encoder.setFragmentTexture(meshShape.normals, index: 3)
+            encoder.setFragmentTexture(mesh.coast, index: 2)
+            encoder.setFragmentTexture(mesh.relief, index: 3)
             encoder.setFragmentTexture(snowCover?.texture ?? placeholder, index: 4)
             encoder.setFragmentSamplerState(surfaceSampler, index: 0)
-            encoder.drawIndexedPrimitives(type: .triangle, indexCount: mesh.indexCount, indexType: .uint32, indexBuffer: mesh.indices, indexBufferOffset: 0)
+            for (slot, var nodes) in shape.surface.nodes(in: frame).enumerated() where !nodes.isEmpty {
+                var terrain = mesh.uniforms(for: shape, grid: ToySurface.grids[slot])
+                let nodeBytes = nodes.count * MemoryLayout<UInt32>.stride
+                if nodeBytes <= 4096 {
+                    encoder.setVertexBytes(&nodes, length: nodeBytes, index: 1)
+                } else {
+                    encoder.setVertexBuffer(device.makeBuffer(bytes: &nodes, length: nodeBytes), offset: 0, index: 1)
+                }
+                encoder.setVertexBytes(&terrain, length: MemoryLayout<TerrainUniforms>.stride, index: 3)
+                let range = mesh.indexRanges[slot]
+                encoder.drawIndexedPrimitives(
+                    type: .triangle,
+                    indexCount: range.count,
+                    indexType: .uint16,
+                    indexBuffer: mesh.indices,
+                    indexBufferOffset: range.lowerBound * MemoryLayout<UInt16>.stride,
+                    instanceCount: nodes.count
+                )
+            }
         }
         encoder.endEncoding()
         return true
     }
 
-    private func toyTargets(matching target: MTLTexture) -> (color: MTLTexture, depth: MTLTexture)? {
-        if let toyTargets, toyTargets.color.width == target.width, toyTargets.color.height == target.height {
-            return toyTargets
+    private func encodeRelief(_ shape: ToyMesh.Shape, of mesh: ToyMesh, commandBuffer: MTLCommandBuffer) {
+        guard let encoder = commandBuffer.makeComputeCommandEncoder() else { return }
+        var terrain = mesh.uniforms(for: shape, grid: ToySurface.grids[0])
+        encoder.setComputePipelineState(reliefPipeline)
+        encoder.setTexture(mesh.relief, index: 0)
+        encoder.setBytes(&terrain, length: MemoryLayout<TerrainUniforms>.stride, index: 0)
+        encoder.setBuffer(shape.surface.coast.buffer, offset: 0, index: 1)
+        encoder.setBuffer(shape.surface.lift.buffer, offset: 0, index: 2)
+        encoder.setBuffer(shape.relief.buffer, offset: 0, index: 3)
+        encoder.setBuffer(shape.profile, offset: 0, index: 4)
+        let threads = MTLSize(width: 16, height: 16, depth: 1)
+        let groups = MTLSize(width: (mesh.relief.width + 15) / 16, height: (mesh.relief.height + 15) / 16, depth: 1)
+        encoder.dispatchThreadgroups(groups, threadsPerThreadgroup: threads)
+        encoder.endEncoding()
+        guard let blit = commandBuffer.makeBlitCommandEncoder() else { return }
+        blit.generateMipmaps(for: mesh.relief)
+        blit.endEncoding()
+    }
+
+    private func meshTargets(matching target: MTLTexture) -> (color: MTLTexture, depth: MTLTexture)? {
+        if let meshTargets, meshTargets.color.width == target.width, meshTargets.color.height == target.height {
+            return meshTargets
         }
         guard
             let color = makeMultisampleTexture(format: Self.pixelFormat, width: target.width, height: target.height),
             let depth = makeMultisampleTexture(format: .depth32Float, width: target.width, height: target.height)
         else { return nil }
-        toyTargets = (color, depth)
-        return toyTargets
+        meshTargets = (color, depth)
+        return meshTargets
     }
 
     private func makeMultisampleTexture(format: MTLPixelFormat, width: Int, height: Int) -> MTLTexture? {
         let descriptor = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: format, width: width, height: height, mipmapped: false)
         descriptor.textureType = .type2DMultisample
-        descriptor.sampleCount = Self.toySampleCount
+        descriptor.sampleCount = Self.meshSampleCount
         descriptor.usage = [.renderTarget]
         descriptor.storageMode = .memoryless
         if let texture = device.makeTexture(descriptor: descriptor) {

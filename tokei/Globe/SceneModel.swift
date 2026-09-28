@@ -35,6 +35,8 @@ final class SceneModel {
     var reduceMotion = false
     var effects = SceneEffects()
     @ObservationIgnored private var pressFootprint = FootprintShape.random(radius: 0.08)
+    @ObservationIgnored private var pressPoint: SIMD3<Double>?
+    @ObservationIgnored private var stroke: SurfaceStroke?
     private(set) var cue: FeedbackCue?
     private(set) var isGlobeReady = false
     private(set) var hasPlacedCamera = false
@@ -61,13 +63,19 @@ final class SceneModel {
     }
 
     func emit(_ kind: FeedbackCue.Kind) {
-        let cue = FeedbackCue(kind: kind)
+        let cue = FeedbackCue(kind: kind, style: style)
         self.cue = cue
         feedback.play(cue, style: style, soundEnabled: soundEnabled)
     }
 
+    var allowsSurfaceDrag: Bool {
+        guard let mesh = style.mesh else { return false }
+        return mesh.snow != nil || !reduceMotion
+    }
+
     func press(at point: SIMD3<Double>, footprint: Double) {
         emit(.press)
+        pressPoint = point
         pressFootprint = FootprintShape.random(radius: footprint)
         stampSnow(at: point, shape: pressFootprint)
         guard !reduceMotion else { return }
@@ -92,13 +100,69 @@ final class SceneModel {
         effects.pop = SceneEffects.Pop(point: point, start: Date())
     }
 
-    private func stampSnow(at point: SIMD3<Double>, shape: FootprintShape) {
-        let material = style.toyMaterial
-        guard material.snowCover > 0, let snowCover = renderer?.snowCover else { return }
+    func beginSurfaceDrag(at point: SIMD3<Double>?, footprint: Double, location: CGPoint) {
+        interruptCamera()
+        emit(.carve)
         let now = Date()
-        let recovery = Double(material.snowRecovery)
-        snowCover.stamp(at: point, shape: shape, recovery: recovery, now: now)
-        effects.snow = SceneEffects.Snow(epoch: snowCover.epoch, until: now.addingTimeInterval(recovery))
+        let tuning = style.effects.drag
+        var stroke = SurfaceStroke(trail: .random(radius: footprint * tuning.trailWidth), location: location, time: now)
+        if let pressPoint, let point, acos(min(max(dot(pressPoint, point), -1), 1)) < stroke.trail.radius * 4 {
+            stroke.trail.last = pressPoint
+            if let snow = style.mesh?.snow, let snowCover = renderer?.snowCover {
+                let hold = snow.recovery * tuning.trailHold
+                snowCover.stamp(at: pressPoint, shape: pressFootprint, recovery: snow.recovery, hold: hold, now: now)
+                extendSnow(from: snowCover, until: now.addingTimeInterval(snow.recovery + hold))
+            }
+        }
+        self.stroke = stroke
+        dragSurface(to: point, location: location)
+    }
+
+    func dragSurface(to point: SIMD3<Double>?, location: CGPoint) {
+        guard var stroke else { return }
+        let now = Date()
+        let tuning = style.effects.drag
+        if let point {
+            if let snow = style.mesh?.snow, let snowCover = renderer?.snowCover {
+                let hold = snow.recovery * tuning.trailHold
+                snowCover.carve(from: stroke.trail.last ?? point, to: point, trail: stroke.trail, recovery: snow.recovery, hold: hold, now: now)
+                extendSnow(from: snowCover, until: now.addingTimeInterval(snow.recovery + hold))
+            }
+            stroke.trail.advance(to: point)
+            if var press = effects.press, press.release == nil {
+                press.pull(to: point, at: now, spring: tuning.follow)
+                effects.press = press
+            }
+        } else {
+            stroke.trail.last = nil
+        }
+        if let strength = stroke.advance(to: location, at: now, onSurface: point != nil, spacing: tuning.grainSpacing) {
+            feedback.grain(.carve, style: style, soundEnabled: soundEnabled, strength: strength)
+        }
+        self.stroke = stroke
+    }
+
+    func endSurfaceDrag() {
+        guard stroke != nil else { return }
+        stroke = nil
+        guard var press = effects.press, press.release == nil else { return }
+        press.release = Date()
+        effects.press = press
+        if style.mesh?.snow == nil {
+            emit(.release)
+        }
+    }
+
+    private func stampSnow(at point: SIMD3<Double>, shape: FootprintShape) {
+        guard let snow = style.mesh?.snow, let snowCover = renderer?.snowCover else { return }
+        let now = Date()
+        snowCover.stamp(at: point, shape: shape, recovery: snow.recovery, now: now)
+        extendSnow(from: snowCover, until: now.addingTimeInterval(snow.recovery))
+    }
+
+    private func extendSnow(from snowCover: SnowCover, until end: Date) {
+        let until = max(effects.snow?.until ?? end, end)
+        effects.snow = SceneEffects.Snow(epoch: snowCover.epoch, until: until)
     }
 
     func fling(axis: SIMD3<Double>, speed: Double) {
@@ -133,7 +197,7 @@ final class SceneModel {
     }
 
     private func updateSound() {
-        feedback.setSoundActive(isForeground && style.soundTimbre != nil && soundEnabled)
+        feedback.setSoundActive(isForeground && style.soundTimbre != nil && soundEnabled, timbre: style.soundTimbre)
     }
 
     func camera(at date: Date) -> OrbitCamera {

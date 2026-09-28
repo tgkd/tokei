@@ -9,6 +9,7 @@ struct GlobeScene: View {
     let focusRect: CGRect
 
     @State private var cache = MarkerLayoutCache()
+    @State private var touch = GlobeTouch()
     @State private var dragOrigin: OrbitCamera?
     @State private var dragStart: CGSize = .zero
     @State private var dragRadius: Double = 1
@@ -31,7 +32,7 @@ struct GlobeScene: View {
                     date: date,
                     selection: store.selection,
                     bounds: focusRect.insetBy(dx: 8, dy: 4),
-                    surface: frame.style.usesMesh ? scene.renderer?.toyMesh?.shapes[frame.style.toyShape]?.surface : nil,
+                    surface: frame.style.mesh.flatMap { scene.renderer?.toyMesh?.shapes[$0.shape]?.surface },
                     cache: cache
                 )
                 ZStack(alignment: .topLeading) {
@@ -50,12 +51,8 @@ struct GlobeScene: View {
                 .simultaneousGesture(rotation(frame: frame))
                 .simultaneousGesture(zoom)
                 .gesture(
-                    GlobePressGesture { location in
-                        if let point = frame.surfacePoint(at: location) {
-                            scene.press(at: point, footprint: 16 / max(frame.globeRadius, 40))
-                        }
-                    } onRelease: { moved in
-                        scene.releasePress(moved: moved)
+                    GlobePressGesture { event in
+                        handle(event, frame: frame)
                     }
                 )
             }
@@ -95,6 +92,7 @@ struct GlobeScene: View {
     private func rotation(frame: GlobeFrame) -> some Gesture {
         DragGesture(minimumDistance: 4)
             .onChanged { value in
+                guard touch.allowsRotation() else { return }
                 if dragOrigin == nil {
                     scene.interruptCamera()
                     dragOrigin = scene.camera
@@ -110,6 +108,7 @@ struct GlobeScene: View {
                 scene.camera = camera.clamped()
             }
             .onEnded { value in
+                guard dragOrigin != nil else { return }
                 dragOrigin = nil
                 let yawVelocity = -Double(value.velocity.width) / dragRadius
                 let pitchVelocity = Double(value.velocity.height) / dragRadius
@@ -138,6 +137,42 @@ struct GlobeScene: View {
                     scene.fly(to: settled, duration: 0.35)
                 }
             }
+    }
+
+    private func handle(_ event: GlobePressGesture.Event, frame: GlobeFrame) {
+        switch event {
+        case let .began(location):
+            let point = frame.surfacePoint(at: location)
+            touch.begin(at: location, holds: point != nil && scene.allowsSurfaceDrag)
+            if let point {
+                scene.press(at: point, footprint: footprint(in: frame))
+            }
+        case let .moved(location):
+            apply(touch.move(to: location), at: location, frame: frame)
+        case .crowded:
+            apply(touch.crowd(), at: .zero, frame: frame)
+        case let .ended(location):
+            apply(touch.end(at: location), at: location, frame: frame)
+        }
+    }
+
+    private func apply(_ step: GlobeTouch.Step?, at location: CGPoint, frame: GlobeFrame) {
+        switch step {
+        case .beginDrag:
+            scene.beginSurfaceDrag(at: frame.surfacePoint(at: location), footprint: footprint(in: frame), location: location)
+        case .drag:
+            scene.dragSurface(to: frame.surfacePoint(at: location), location: location)
+        case .endDrag:
+            scene.endSurfaceDrag()
+        case let .release(moved):
+            scene.releasePress(moved: moved)
+        case nil:
+            break
+        }
+    }
+
+    private func footprint(in frame: GlobeFrame) -> Double {
+        16 / max(frame.globeRadius, 40)
     }
 
     private func select(near location: CGPoint, in items: [MarkerItem]) {

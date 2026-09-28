@@ -93,6 +93,7 @@ struct MountainRange {
             center: center,
             reach: cos(min(reach, .pi)),
             points: points,
+            normals: zip(points, points.dropFirst()).map { normalize(cross($0, $1)) },
             lengths: lengths,
             halfWidth: halfWidth,
             ridgeHeight: ridgeHeight,
@@ -213,6 +214,7 @@ struct CarvedRange {
     let center: SIMD3<Double>
     let reach: Double
     let points: [SIMD3<Double>]
+    let normals: [SIMD3<Double>]
     let lengths: [Double]
     let halfWidth: Double
     let ridgeHeight: Double
@@ -233,12 +235,18 @@ struct CarvedRange {
         var nearest = Double.greatestFiniteMagnitude
         var along = 0.0
         var travelled = 0.0
+        let band = sin(halfWidth)
         for (index, length) in lengths.enumerated() {
+            let normal = normals[index]
+            let sine = dot(direction, normal)
+            guard abs(sine) < band else {
+                travelled += length
+                continue
+            }
             let start = points[index]
             let end = points[index + 1]
-            let normal = normalize(cross(start, end))
-            let offset = asin(min(max(dot(direction, normal), -1), 1))
-            let projected = normalize(direction - normal * dot(direction, normal))
+            let offset = asin(min(max(sine, -1), 1))
+            let projected = normalize(direction - normal * sine)
             let fromStart = atan2(dot(cross(start, projected), normal), dot(start, projected))
             let distance: Double
             let position: Double

@@ -3,10 +3,53 @@ import SwiftUI
 import simd
 
 struct SceneEffects: Equatable {
+    struct Follow: Equatable {
+        let origin: SIMD3<Double>
+        let velocity: SIMD3<Double>
+        let target: SIMD3<Double>
+        let start: Date
+
+        func position(at date: Date, spring: Spring) -> SIMD3<Double> {
+            let time = max(date.timeIntervalSince(start), 0)
+            let gap = target - origin
+            let travel = SIMD3(
+                spring.value(target: gap.x, initialVelocity: velocity.x, time: time),
+                spring.value(target: gap.y, initialVelocity: velocity.y, time: time),
+                spring.value(target: gap.z, initialVelocity: velocity.z, time: time)
+            )
+            return normalize(origin + travel)
+        }
+
+        func velocity(at date: Date, spring: Spring) -> SIMD3<Double> {
+            let time = max(date.timeIntervalSince(start), 0)
+            let gap = target - origin
+            return SIMD3(
+                spring.velocity(target: gap.x, initialVelocity: velocity.x, time: time),
+                spring.velocity(target: gap.y, initialVelocity: velocity.y, time: time),
+                spring.velocity(target: gap.z, initialVelocity: velocity.z, time: time)
+            )
+        }
+    }
+
     struct Press: Equatable {
         let point: SIMD3<Double>
         let start: Date
         var release: Date?
+        var follow: Follow?
+
+        func center(at date: Date, spring: Spring) -> SIMD3<Double> {
+            follow?.position(at: date, spring: spring) ?? point
+        }
+
+        mutating func pull(to target: SIMD3<Double>, at date: Date, spring: Spring) {
+            let current = follow ?? Follow(origin: point, velocity: .zero, target: point, start: date)
+            follow = Follow(
+                origin: current.position(at: date, spring: spring),
+                velocity: current.velocity(at: date, spring: spring),
+                target: target,
+                start: date
+            )
+        }
     }
 
     struct Pop: Equatable {
@@ -41,13 +84,14 @@ struct SceneEffects: Equatable {
         var shape = matrix_identity_double3x3
         if let press {
             let amount = Self.pressAmount(press, at: date, tuning: tuning.press)
-            snapshot.dentPoint = press.point
+            let center = press.center(at: date, spring: tuning.drag.follow)
+            snapshot.dentPoint = center
             snapshot.dentDepth = tuning.press.dentDepth * amount
             snapshot.dentRadius = tuning.press.dentRadius
             snapshot.dentShade = tuning.press.dentShade
             snapshot.frost = tuning.press.frost * max(amount, 0)
             snapshot.cracks = tuning.press.cracks * max(amount, 0)
-            shape = shape * Self.stretch(along: press.point, by: -tuning.press.squash * amount)
+            shape = shape * Self.stretch(along: center, by: -tuning.press.squash * amount)
         }
         if let pop {
             let age = max(date.timeIntervalSince(pop.start), 0)

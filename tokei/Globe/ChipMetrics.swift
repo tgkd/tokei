@@ -2,29 +2,111 @@ import SwiftUI
 import UIKit
 
 enum ChipMetrics {
-    static let nameFont = UIFont.systemFont(ofSize: 13, weight: .semibold)
-    static let timeFont = UIFont.monospacedDigitSystemFont(ofSize: 13, weight: .regular)
-    static let detailFont = UIFont.systemFont(ofSize: 11, weight: .medium)
-    static let horizontalPadding: CGFloat = 9
-    static let verticalPadding: CGFloat = 5
-    static let spacing: CGFloat = 6
-    static let lineSpacing: CGFloat = 1
-    static let dotRadius: CGFloat = 4.5
+    struct Fonts {
+        let name: UIFont
+        let time: UIFont
+        let detail: UIFont
+
+        init(_ chip: ChipLook) {
+            name = ChipMetrics.font(chip.name)
+            time = ChipMetrics.font(chip.time)
+            detail = ChipMetrics.font(chip.detail)
+        }
+    }
+
+    static let dotRadius: CGFloat = 5.5
     static let gap: CGFloat = 4
 
-    static func size(name: String, time: String, detail: String?) -> CGSize {
-        let nameWidth = width(of: name, font: nameFont)
-        let timeWidth = width(of: time, font: timeFont)
-        var width = nameWidth + spacing + timeWidth
-        var height = ceil(nameFont.lineHeight)
-        if let detail {
-            width = max(width, self.width(of: detail, font: detailFont))
-            height += lineSpacing + ceil(detailFont.lineHeight)
+    private static let realisticFonts = Fonts(SceneStyle.realistic.interface.chip)
+    private static let toyFonts = Fonts(SceneStyle.toy.interface.chip)
+    private static let iceFonts = Fonts(SceneStyle.ice.interface.chip)
+    private static let chromeFonts = Fonts(SceneStyle.chrome.interface.chip)
+    private static let paperFonts = Fonts(SceneStyle.paper.interface.chip)
+
+    static func fonts(for style: SceneStyle) -> Fonts {
+        switch style {
+        case .realistic: realisticFonts
+        case .toy: toyFonts
+        case .ice: iceFonts
+        case .chrome: chromeFonts
+        case .paper: paperFonts
         }
-        return CGSize(width: ceil(width + horizontalPadding * 2), height: ceil(height + verticalPadding * 2))
+    }
+
+    static func displayName(_ name: String, style: SceneStyle) -> String {
+        style.interface.chip.uppercasedName ? name.uppercased() : name
+    }
+
+    static func size(name: String, time: String, detail: String?, style: SceneStyle) -> CGSize {
+        let chip = style.interface.chip
+        let fonts = fonts(for: style)
+        let nameWidth = width(of: displayName(name, style: style), font: fonts.name)
+        let timeWidth = width(of: time, font: fonts.time)
+        var width = nameWidth + chip.spacing + timeWidth
+        var height = ceil(max(fonts.name.lineHeight, fonts.time.lineHeight))
+        if let detail {
+            width = max(width, self.width(of: detail, font: fonts.detail))
+            height += chip.lineSpacing + ceil(fonts.detail.lineHeight)
+        }
+        return CGSize(
+            width: ceil(width + chip.horizontalPadding * 2),
+            height: ceil(height + chip.verticalPadding * 2 + chip.surface.depth)
+        )
     }
 
     private static func width(of text: String, font: UIFont) -> CGFloat {
         ceil((text as NSString).size(withAttributes: [.font: font]).width)
+    }
+
+    private static func font(_ face: ChipLook.Face) -> UIFont {
+        let base = UIFont.systemFont(ofSize: face.size, weight: uiWeight(face.weight), width: uiWidth(face.width))
+        var descriptor = base.fontDescriptor
+        if let design = systemDesign(face.design), let designed = descriptor.withDesign(design) {
+            descriptor = designed
+        }
+        if face.italic, let slanted = descriptor.withSymbolicTraits(descriptor.symbolicTraits.union(.traitItalic)) {
+            descriptor = slanted
+        }
+        if face.monospacedDigits {
+            descriptor = descriptor.addingAttributes([
+                .featureSettings: [[
+                    UIFontDescriptor.FeatureKey.type: kNumberSpacingType,
+                    UIFontDescriptor.FeatureKey.selector: kMonospacedNumbersSelector,
+                ]],
+            ])
+        }
+        return UIFont(descriptor: descriptor, size: face.size)
+    }
+
+    private static func uiWeight(_ weight: Font.Weight) -> UIFont.Weight {
+        switch weight {
+        case .ultraLight: .ultraLight
+        case .thin: .thin
+        case .light: .light
+        case .medium: .medium
+        case .semibold: .semibold
+        case .bold: .bold
+        case .heavy: .heavy
+        case .black: .black
+        default: .regular
+        }
+    }
+
+    private static func uiWidth(_ width: Font.Width) -> UIFont.Width {
+        switch width {
+        case .compressed: .compressed
+        case .condensed: .condensed
+        case .expanded: .expanded
+        default: .standard
+        }
+    }
+
+    private static func systemDesign(_ design: Font.Design) -> UIFontDescriptor.SystemDesign? {
+        switch design {
+        case .rounded: .rounded
+        case .serif: .serif
+        case .monospaced: .monospaced
+        default: nil
+        }
     }
 }

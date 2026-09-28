@@ -7,8 +7,10 @@ struct RootView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     @State private var showsList = false
+    @State private var showsThemes = false
     @State private var detent: PresentationDetent = .medium
     @State private var panelHeight: CGFloat = 132
+    @State private var landSilhouette: CGImage?
 
     var body: some View {
         GeometryReader { proxy in
@@ -21,7 +23,7 @@ struct RootView: View {
                     VStack(spacing: 0) {
                         topBar
                         Spacer(minLength: 0)
-                        ScrubberPanel(now: store.now, shift: shift)
+                        bottomPanel(shift: shift)
                             .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { panelHeight = $0 }
                             .padding(.horizontal, 12)
                             .padding(.bottom, 2)
@@ -54,6 +56,12 @@ struct RootView: View {
             guard !Task.isCancelled else { return }
             scene.settle(glide)
         }
+        .task(id: showsThemes) {
+            guard showsThemes, landSilhouette == nil else { return }
+            landSilhouette = await Task.detached(priority: .userInitiated) {
+                LandSilhouette.render(latitude: 18, longitude: 12)
+            }.value
+        }
         .onChange(of: scenePhase) { _, phase in
             scene.isForeground = phase == .active
             if phase == .active {
@@ -68,19 +76,28 @@ struct RootView: View {
             cue?.haptic
         }
         .environment(\.sceneAccent, scene.style.accent)
-        .preferredColorScheme(.dark)
+        .environment(\.sceneStyle, scene.style)
+        .preferredColorScheme(scene.style.interface.colorScheme)
     }
 
     private var topBar: some View {
         HStack {
-            GlassIconButton(systemName: "location.fill", label: "Show my time zone") {
+            ThemeIconButton(systemName: "location.fill", label: "Show my time zone") {
                 store.focusHome()
             }
             Spacer()
             GlassEffectContainer(spacing: 12) {
                 HStack(spacing: 12) {
-                    SceneStyleMenu()
-                    GlassIconButton(systemName: "list.bullet", label: "Cities") {
+                    ThemeIconButton(
+                        systemName: showsThemes ? "paintpalette.fill" : "paintpalette",
+                        label: "Theme",
+                        value: scene.style.displayName,
+                        isActive: showsThemes
+                    ) {
+                        setThemes(visible: !showsThemes)
+                    }
+                    ThemeIconButton(systemName: "list.bullet", label: "Cities") {
+                        setThemes(visible: false)
                         detent = .medium
                         showsList = true
                     }
@@ -89,6 +106,38 @@ struct RootView: View {
         }
         .padding(.horizontal, 20)
         .padding(.top, 4)
+    }
+
+    private func bottomPanel(shift: Double) -> some View {
+        ZStack(alignment: .bottom) {
+            if showsThemes {
+                ThemeTray(land: landSilhouette) {
+                    setThemes(visible: false)
+                }
+                .transition(panelTransition)
+            } else {
+                ScrubberPanel(now: store.now, shift: shift)
+                    .transition(panelTransition)
+            }
+        }
+    }
+
+    private var panelTransition: AnyTransition {
+        guard !reduceMotion else { return .opacity }
+        return .asymmetric(
+            insertion: .scale(scale: 0.9, anchor: .bottom).combined(with: .opacity),
+            removal: .scale(scale: 0.96, anchor: .bottom).combined(with: .opacity)
+        )
+    }
+
+    private func setThemes(visible: Bool) {
+        guard visible != showsThemes else { return }
+        if visible {
+            showsList = false
+        }
+        withAnimation(reduceMotion ? .easeInOut(duration: 0.2) : .spring(duration: 0.42, bounce: 0.28)) {
+            showsThemes = visible
+        }
     }
 
     private func focusRect(size: CGSize, insets: EdgeInsets) -> CGRect {

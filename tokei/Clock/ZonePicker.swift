@@ -3,6 +3,7 @@ import SwiftUI
 struct ZonePicker: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.sceneAccent) private var accent
+    @Environment(\.sceneStyle) private var style
 
     let date: Date
     let existing: Set<String>
@@ -30,6 +31,7 @@ struct ZonePicker: View {
     }
 
     var body: some View {
+        let interface = style.interface
         NavigationStack {
             List(results, id: \.self) { identifier in
                 let added = existing.contains(identifier)
@@ -37,36 +39,52 @@ struct ZonePicker: View {
                     onPick(identifier)
                     dismiss()
                 } label: {
-                    row(identifier, added: added)
+                    row(identifier, added: added, interface: interface)
                 }
                 .buttonStyle(.plain)
                 .disabled(added)
+                .listRowBackground(Color.clear)
+                .listRowSeparatorTint(interface.ink.opacity(0.12))
             }
             .listStyle(.plain)
+            .scrollContentBackground(.hidden)
             .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: "City, region or GMT offset")
             .navigationTitle("Add City")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                ToolbarItem(placement: .principal) {
+                    Text("Add City")
+                        .font(interface.typography.title(.headline))
+                        .foregroundStyle(interface.ink)
+                        .accessibilityAddTraits(.isHeader)
+                }
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") {
                         dismiss()
                     }
+                    .font(interface.typography.body(.body))
                 }
             }
         }
+        .tint(accent)
+        .modifier(SheetBackground(color: interface.sheet))
     }
 
-    private func row(_ identifier: String, added: Bool) -> some View {
+    private func row(_ identifier: String, added: Bool, interface: InterfaceLook) -> some View {
         let zone = TimeZone(identifier: identifier) ?? .current
         let region = Zone.regionName(for: identifier)
         let detail = [region, ZoneClock.gmtLabel(of: zone, at: date)].filter { !$0.isEmpty }.joined(separator: " · ")
+        let typography = interface.typography
         return HStack(spacing: 12) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(Zone.cityName(for: identifier))
-                    .font(.body.weight(.semibold))
+                    .font(typography.title(.body))
+                    .foregroundStyle(interface.ink)
                 Text(detail)
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
+                    .font(typography.caption(.footnote))
+                    .textCase(typography.captionCase)
+                    .tracking(typography.captionTracking)
+                    .foregroundStyle(interface.secondaryInk)
             }
             Spacer(minLength: 8)
             if added {
@@ -74,10 +92,13 @@ struct ZonePicker: View {
                     .font(.body.weight(.semibold))
                     .foregroundStyle(accent)
             } else {
-                Text(ZoneClock.time(date, in: zone))
-                    .font(.body)
-                    .monospacedDigit()
-                    .foregroundStyle(.secondary)
+                DisplayTime(
+                    date: date,
+                    zone: zone,
+                    font: typography.digits(.body, weight: typography.bodyWeight),
+                    periodFont: typography.digits(.caption, weight: typography.titleWeight)
+                )
+                .foregroundStyle(interface.secondaryInk)
             }
         }
         .padding(.vertical, 2)
