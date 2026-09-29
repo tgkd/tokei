@@ -38,6 +38,22 @@ static float4 projectToClip(float3 worldPosition, constant GlobeUniforms &unifor
     return float4(ndc * depth, far * (depth - near) / (far - near), depth);
 }
 
+static float placedRadius(float3 direction, float lift, constant EffectUniforms &effects) {
+    if (effectsActive(effects)) {
+        float3 slope;
+        return 1.0 + lift + effectOffset(direction, effects, slope);
+    }
+    return 1.0 + lift;
+}
+
+static MeshFragmentIn placedVertex(float3 spherePosition, constant GlobeUniforms &uniforms, constant EffectUniforms &effects) {
+    float3 worldPosition = effectsActive(effects) ? effectShape(effects) * spherePosition : spherePosition;
+    MeshFragmentIn out;
+    out.position = projectToClip(worldPosition, uniforms);
+    out.spherePosition = spherePosition;
+    return out;
+}
+
 static float cubeTangent(float parameter) {
     return abs(parameter) == 1.0 ? parameter : tan(parameter * M_PI_F / 4.0);
 }
@@ -178,20 +194,21 @@ vertex MeshFragmentIn meshVertex(uint vertexID [[vertex_id]],
     float2 parameter = -1.0 + size * (origin + float2(corner) / float(cells));
     float3 direction = normalize(faceNormals[face] + faceUs[face] * cubeTangent(parameter.x) + faceVs[face] * cubeTangent(parameter.y));
     float height = terrainHeight(direction, terrain, coast, lift, profile);
-    float radius = 1.0 + height;
-    if (effectsActive(effects)) {
-        float3 slope;
-        radius = 1.0 + height * effects.radii.w + effectOffset(direction, effects, slope);
-    }
+    float radius = placedRadius(direction, effectsActive(effects) ? height * effects.radii.w : height, effects);
     if (skirt) {
         radius -= 0.5 * size * M_PI_F / 4.0 / float(cells) + 1e-4;
     }
-    float3 spherePosition = direction * radius;
-    float3 worldPosition = effectsActive(effects) ? effectShape(effects) * spherePosition : spherePosition;
-    MeshFragmentIn out;
-    out.position = projectToClip(worldPosition, uniforms);
-    out.spherePosition = spherePosition;
-    return out;
+    return placedVertex(direction * radius, uniforms, effects);
+}
+
+vertex MeshFragmentIn cloudVertex(uint vertexID [[vertex_id]],
+                                  constant GlobeUniforms &uniforms [[buffer(0)]],
+                                  const device packed_float3 *directions [[buffer(1)]],
+                                  constant EffectUniforms &effects [[buffer(2)]],
+                                  constant float4 &shell [[buffer(3)]]) {
+    float3 direction = float3(directions[vertexID]);
+    float lift = effectsActive(effects) ? max(shell.x * effects.radii.w, shell.y) : shell.x;
+    return placedVertex(direction * placedRadius(direction, lift, effects), uniforms, effects);
 }
 
 kernel void reliefKernel(texture2d<float, access::write> target [[texture(0)]],

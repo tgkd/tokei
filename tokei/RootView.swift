@@ -3,6 +3,7 @@ import SwiftUI
 struct RootView: View {
     @Environment(ClockStore.self) private var store
     @Environment(SceneModel.self) private var scene
+    @Environment(WeatherFeed.self) private var weather
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -11,6 +12,7 @@ struct RootView: View {
     @State private var detent: PresentationDetent = .medium
     @State private var panelHeight: CGFloat = 132
     @State private var landSilhouette: CGImage?
+    @State private var showsWeatherStatus = false
 
     var body: some View {
         GeometryReader { proxy in
@@ -22,9 +24,19 @@ struct RootView: View {
                     GlobeScene(date: date, isShifted: abs(shift) >= 0.5, focusRect: rect)
                     VStack(spacing: 0) {
                         topBar
+                        if showsWeatherStatus && !showsList && !showsThemes {
+                            WeatherBadge(
+                                status: weather.status,
+                                isScrubbing: scene.isScrubbing,
+                                shownTime: weather.frame.map { ZoneClock.time($0.validDate, in: store.homeZone) }
+                            ) {
+                                weather.retry()
+                            }
+                            .padding(.top, 10)
+                            .transition(.opacity)
+                        }
                         Spacer(minLength: 0)
                         bottomPanel(shift: shift)
-                            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { panelHeight = $0 }
                             .padding(.horizontal, 12)
                             .padding(.bottom, 2)
                             .opacity(showsList ? 0 : 1)
@@ -56,6 +68,26 @@ struct RootView: View {
             guard !Task.isCancelled else { return }
             scene.settle(glide)
         }
+        .task(id: weatherRequest) {
+            guard let weatherRequest else { return }
+            await weather.run(weatherRequest)
+        }
+        .task(id: badgeTrigger) {
+            let trigger = badgeTrigger
+            guard trigger.isVisible else {
+                withAnimation(.easeOut(duration: 0.2)) {
+                    showsWeatherStatus = false
+                }
+                return
+            }
+            if !trigger.isScrubbing {
+                try? await Task.sleep(for: .seconds(1))
+                guard !Task.isCancelled else { return }
+            }
+            withAnimation(.easeIn(duration: 0.2)) {
+                showsWeatherStatus = true
+            }
+        }
         .task(id: showsThemes) {
             guard showsThemes, landSilhouette == nil else { return }
             landSilhouette = await Task.detached(priority: .userInitiated) {
@@ -78,6 +110,19 @@ struct RootView: View {
         .environment(\.sceneAccent, scene.style.accent)
         .environment(\.sceneStyle, scene.style)
         .preferredColorScheme(scene.style.interface.colorScheme)
+    }
+
+    private var weatherRequest: WeatherFeed.Request? {
+        guard scene.style.hasClouds, scenePhase == .active else { return nil }
+        if scene.isScrubbing || scene.shiftGlide != nil, let target = weather.target {
+            return WeatherFeed.Request(target: target, attempt: weather.attempt)
+        }
+        let target = WeatherSchedule.validDate(near: store.now.addingTimeInterval(scene.shift * 60))
+        return WeatherFeed.Request(target: target, attempt: weather.attempt)
+    }
+
+    private var badgeTrigger: WeatherBadge.Trigger {
+        WeatherBadge.Trigger(status: weather.status, isScrubbing: scene.isScrubbing, isActive: scene.style.hasClouds)
     }
 
     private var topBar: some View {
@@ -111,12 +156,11 @@ struct RootView: View {
     private func bottomPanel(shift: Double) -> some View {
         ZStack(alignment: .bottom) {
             if showsThemes {
-                ThemeTray(land: landSilhouette) {
-                    setThemes(visible: false)
-                }
-                .transition(panelTransition)
+                ThemeTray(land: landSilhouette)
+                    .transition(panelTransition)
             } else {
                 ScrubberPanel(now: store.now, shift: shift, homeZone: store.homeZone)
+                    .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { panelHeight = $0 }
                     .transition(panelTransition)
             }
         }

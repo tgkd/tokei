@@ -7,6 +7,7 @@ struct SwatchLook: Equatable {
         case frost
         case chrome
         case paper
+        case clouds
     }
 
     var ocean: Color

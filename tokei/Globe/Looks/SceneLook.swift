@@ -30,13 +30,15 @@ struct SceneLook {
 struct MeshLook {
     let fragment: String
     let background: String?
+    let clouds: String?
     let shape: ToyShape
     let parameters: [UInt8]
     let snow: SnowSettings?
 
-    init<Parameters>(fragment: String, background: String? = nil, shape: ToyShape, parameters: Parameters, snow: SnowSettings? = nil) {
+    init<Parameters>(fragment: String, background: String? = nil, clouds: String? = nil, shape: ToyShape, parameters: Parameters, snow: SnowSettings? = nil) {
         self.fragment = fragment
         self.background = background
+        self.clouds = clouds
         self.shape = shape
         self.parameters = withUnsafeBytes(of: parameters) { Array($0) }
         self.snow = snow
@@ -45,6 +47,7 @@ struct MeshLook {
 
 struct SnowSettings {
     let recovery: Double
+    var footprints = true
 }
 
 extension SIMD4 where Scalar == Float {

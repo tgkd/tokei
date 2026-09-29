@@ -47,8 +47,11 @@ struct EffectSnapshot: Equatable {
     }
 
     func place(_ direction: SIMD3<Double>, surfaceRadius: Double) -> SIMD3<Double> {
-        let radius = 1 + (surfaceRadius - 1) * inflate + offset(along: direction)
-        return shape * (direction * radius)
+        place(direction, lift: (surfaceRadius - 1) * inflate)
+    }
+
+    func place(_ direction: SIMD3<Double>, lift: Double) -> SIMD3<Double> {
+        shape * (direction * (1 + lift + offset(along: direction)))
     }
 
     func offset(along direction: SIMD3<Double>) -> Double {

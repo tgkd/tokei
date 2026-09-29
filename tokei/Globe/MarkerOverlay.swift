@@ -21,6 +21,7 @@ struct MarkerOverlay: View {
                             name: item.zone.cityName,
                             time: item.time,
                             detail: item.detail,
+                            weather: item.weather,
                             isSelected: item.id == selection,
                             isShifted: isShifted
                         )

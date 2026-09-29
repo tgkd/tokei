@@ -26,6 +26,7 @@ extension SceneStyle {
         case .ice: .ice
         case .chrome: .chrome
         case .paper: .paper
+        case .weather: .weather
         }
     }
 }
@@ -339,6 +340,72 @@ extension InterfaceLook {
                 night: Color(hex: 0x45487D).opacity(0.3),
                 rim: ink.opacity(0.35),
                 finish: .paper
+            )
+        )
+    }()
+
+    static let weather: InterfaceLook = {
+        let accent = SceneStyle.weather.accent
+        let backdrop = SceneStyle.weather.backdrop
+        let navy = Color(hex: 0x10213F)
+        let mist = Color(hex: 0x6E83A3)
+        return InterfaceLook(
+            colorScheme: .dark,
+            ink: .white,
+            secondaryInk: Color(hex: 0xB7C7DC),
+            typography: InterfaceTypography(
+                design: .rounded,
+                digitDesign: .rounded,
+                displayWeight: .semibold,
+                titleWeight: .semibold,
+                bodyWeight: .medium,
+                captionWeight: .medium,
+                symbolWeight: .semibold
+            ),
+            panel: .glass(tint: Color(hex: 0x2B4F86).opacity(0.35), clear: false, edge: .white.opacity(0.16)),
+            panelCorner: 30,
+            control: .glass(tint: Color(hex: 0x2B4F86).opacity(0.3), clear: false, edge: .white.opacity(0.16)),
+            controlInk: .white,
+            accentSurface: .glass(tint: accent.opacity(0.9), clear: false, edge: nil),
+            onAccent: navy,
+            sheet: backdrop.mix(with: .white, by: 0.06),
+            chip: ChipLook(
+                name: .init(size: 13.5, weight: .semibold, design: .rounded),
+                time: .init(size: 13.5, weight: .medium, design: .rounded, monospacedDigits: true),
+                detail: .init(size: 11.5, weight: .medium, design: .rounded),
+                horizontalPadding: 10,
+                corner: 100,
+                surface: .solid(fill: Color(hex: 0xFDFEFF).opacity(0.94), edge: Color(hex: 0xC9D6E6)),
+                selectedSurface: .solid(fill: accent, edge: nil),
+                nameColor: navy,
+                timeColor: mist,
+                detailColor: mist,
+                shiftedTimeColor: Color(hex: 0x2F7BEA),
+                selectedInk: navy
+            ),
+            bead: BeadLook(
+                body: .white,
+                shade: Color(hex: 0xB9C8DB),
+                highlight: .white,
+                outline: navy,
+                outlineWidth: 1.2,
+                halo: accent.opacity(0.45)
+            ),
+            tape: TapeLook(
+                tick: .white,
+                label: Color(hex: 0xB7C7DC),
+                labelWeight: .semibold,
+                labelDesign: .rounded,
+                hourWidth: 2,
+                quarterWidth: 1.5,
+                needle: .capsule
+            ),
+            swatch: SwatchLook(
+                ocean: Color(hex: 0x2A64A8),
+                land: Color(hex: 0x9CBF79),
+                night: Color(hex: 0x0B1A33).opacity(0.6),
+                rim: .white.opacity(0.5),
+                finish: .clouds
             )
         )
     }()

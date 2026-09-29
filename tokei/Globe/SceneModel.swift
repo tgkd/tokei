@@ -16,6 +16,9 @@ final class SceneModel {
         didSet {
             style.save()
             updateSound()
+            if style != oldValue {
+                resetDisturbance()
+            }
             if style.usesMesh && style != oldValue {
                 inflate(announced: true)
             }
@@ -154,7 +157,7 @@ final class SceneModel {
     }
 
     private func stampSnow(at point: SIMD3<Double>, shape: FootprintShape) {
-        guard let snow = style.mesh?.snow, let snowCover = renderer?.snowCover else { return }
+        guard let snow = style.mesh?.snow, snow.footprints, let snowCover = renderer?.snowCover else { return }
         let now = Date()
         snowCover.stamp(at: point, shape: shape, recovery: snow.recovery, now: now)
         extendSnow(from: snowCover, until: now.addingTimeInterval(snow.recovery))
@@ -171,6 +174,13 @@ final class SceneModel {
         let stretch = min(speed * tuning.stretchPerSpeed, tuning.maximumStretch)
         guard stretch > 0.002 else { return }
         effects.fling = SceneEffects.Fling(axis: normalize(axis), stretch: stretch, start: Date())
+    }
+
+    private func resetDisturbance() {
+        stroke = nil
+        pressPoint = nil
+        effects.snow = nil
+        renderer?.snowCover?.reset()
     }
 
     func settleEffects() {

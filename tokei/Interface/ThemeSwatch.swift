@@ -46,6 +46,11 @@ struct ThemeSwatch: View {
         switch look.finish {
         case .atmosphere, .paper:
             break
+        case .clouds:
+            for puff in Self.puffs {
+                let center = CGPoint(x: rect.minX + puff.x * unit, y: rect.minY + puff.y * unit)
+                context.fill(Path(ellipseIn: CGRect(x: center.x - puff.size * unit, y: center.y - puff.size * unit, width: 2 * puff.size * unit, height: 2 * puff.size * unit)), with: .color(.white))
+            }
         case .gloss:
             let sheenRect = CGRect(x: rect.minX + 16 * unit, y: rect.minY + 10 * unit, width: 40 * unit, height: 24 * unit)
             let tilt = CGAffineTransform(translationX: sheenRect.midX, y: sheenRect.midY)
@@ -73,7 +78,7 @@ struct ThemeSwatch: View {
             context.stroke(Path(ellipseIn: rect.insetBy(dx: 0.6 * unit, dy: 0.6 * unit)), with: .color(look.rim.opacity(0.75)), lineWidth: 1.2 * unit)
         case .gloss:
             context.stroke(Path(ellipseIn: rect.insetBy(dx: 1.5 * unit, dy: 1.5 * unit)), with: .color(look.rim), lineWidth: 3 * unit)
-        case .frost:
+        case .frost, .clouds:
             context.stroke(Path(ellipseIn: rect.insetBy(dx: 0.5 * unit, dy: 0.5 * unit)), with: .color(look.rim), lineWidth: unit)
         case .chrome:
             context.stroke(Path(ellipseIn: rect.insetBy(dx: 0.5 * unit, dy: 0.5 * unit)), with: .color(look.rim), lineWidth: unit)
@@ -97,6 +102,16 @@ struct ThemeSwatch: View {
         path.closeSubpath()
         return path
     }
+
+    private static let puffs: [(x: CGFloat, y: CGFloat, size: CGFloat)] = [
+        (24, 36, 8),
+        (34, 30, 10),
+        (45, 35, 8),
+        (33, 40, 7),
+        (58, 66, 7),
+        (67, 60, 9),
+        (76, 66, 6.5),
+    ]
 
     private static let sparkles: [(x: CGFloat, y: CGFloat, size: CGFloat)] = [
         (30, 26, 7),

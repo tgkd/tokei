@@ -126,6 +126,28 @@ final class SnowCover {
         flush()
     }
 
+    func level(at direction: SIMD3<Double>, clock: Double, recovery: Double) -> Float {
+        guard clock > 0 else { return 1 }
+        let clock = Float(clock)
+        let recovery = Float(recovery)
+        let longitude = atan2(direction.x, direction.z)
+        let latitude = asin(min(max(direction.y, -1), 1))
+        let texelX = (longitude / (2 * .pi) + 0.5) * Double(Self.width) - 0.5
+        let texelY = (0.5 - latitude / .pi) * Double(Self.height) - 0.5
+        let column = Int(floor(texelX))
+        let row = Int(floor(texelY))
+        let tx = Float(texelX - floor(texelX))
+        let ty = Float(texelY - floor(texelY))
+        func refill(_ column: Int, _ row: Int) -> Float {
+            let wrapped = ((column % Self.width) + Self.width) % Self.width
+            let clamped = min(max(row, 0), Self.height - 1)
+            return min(max((clock - Float(stamps[clamped * Self.width + wrapped])) / recovery, 0), 1)
+        }
+        let top = refill(column, row) * (1 - tx) + refill(column + 1, row) * tx
+        let bottom = refill(column, row + 1) * (1 - tx) + refill(column + 1, row + 1) * tx
+        return top * (1 - ty) + bottom * ty
+    }
+
     func reset() {
         epoch = Date()
         guard let rows = disturbedRows else { return }

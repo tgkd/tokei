@@ -6,6 +6,7 @@ enum SceneStyle: String, CaseIterable, Identifiable {
     case ice
     case chrome
     case paper
+    case weather
 
     private static let defaultsKey = "scene_style"
 
@@ -20,6 +21,7 @@ enum SceneStyle: String, CaseIterable, Identifiable {
         case .ice: .ice
         case .chrome: .chrome
         case .paper: .paper
+        case .weather: .weather
         }
     }
 
@@ -33,6 +35,10 @@ enum SceneStyle: String, CaseIterable, Identifiable {
 
     var usesMesh: Bool {
         look.mesh != nil
+    }
+
+    var hasClouds: Bool {
+        look.mesh?.clouds != nil
     }
 
     var soundTimbre: SoundTimbre? {

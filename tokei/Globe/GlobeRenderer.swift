@@ -24,6 +24,7 @@ final class GlobeRenderer {
     private let effectsPipeline: MTLRenderPipelineState
     private let meshPipelines: [String: MTLRenderPipelineState]
     private let backgroundPipelines: [String: MTLRenderPipelineState]
+    private let cloudPipelines: [String: MTLRenderPipelineState]
     private let meshDepthState: MTLDepthStencilState
     private let backgroundDepthState: MTLDepthStencilState
     private let reliefPipeline: MTLComputePipelineState
@@ -34,6 +35,8 @@ final class GlobeRenderer {
     private(set) var textures: GlobeTextures?
     private(set) var toyMesh: ToyMesh?
     let snowCover: SnowCover?
+    private let cloudShell: CloudShell?
+    private var weatherTexture: (frame: WeatherFrame, texture: MTLTexture)?
     private var meshTargets: (color: MTLTexture, depth: MTLTexture)?
 
     init?(device: MTLDevice? = MTLCreateSystemDefaultDevice(), library: MTLLibrary? = nil) {
@@ -45,6 +48,7 @@ final class GlobeRenderer {
             let fragmentFunction = Self.realisticFragment(in: library, effects: false),
             let effectsFragmentFunction = Self.realisticFragment(in: library, effects: true),
             let meshVertexFunction = library.makeFunction(name: "meshVertex"),
+            let cloudVertexFunction = library.makeFunction(name: "cloudVertex"),
             let reliefKernel = library.makeFunction(name: "reliefKernel"),
             let kernel = library.makeFunction(name: "transmittanceKernel")
         else { return nil }
@@ -81,6 +85,19 @@ final class GlobeRenderer {
             backgroundDescriptor.rasterSampleCount = Self.meshSampleCount
             guard backgroundDescriptor.fragmentFunction != nil, let state = try? device.makeRenderPipelineState(descriptor: backgroundDescriptor) else { return nil }
             backgroundPipelines[fragment] = state
+        }
+
+        var cloudPipelines: [String: MTLRenderPipelineState] = [:]
+        for fragment in Set(SceneStyle.allCases.compactMap(\.mesh?.clouds)) {
+            let cloudDescriptor = MTLRenderPipelineDescriptor()
+            cloudDescriptor.vertexFunction = cloudVertexFunction
+            cloudDescriptor.fragmentFunction = library.makeFunction(name: fragment)
+            cloudDescriptor.colorAttachments[0].pixelFormat = Self.pixelFormat
+            cloudDescriptor.depthAttachmentPixelFormat = .depth32Float
+            cloudDescriptor.rasterSampleCount = Self.meshSampleCount
+            cloudDescriptor.isAlphaToCoverageEnabled = true
+            guard cloudDescriptor.fragmentFunction != nil, let state = try? device.makeRenderPipelineState(descriptor: cloudDescriptor) else { return nil }
+            cloudPipelines[fragment] = state
         }
 
         let backgroundDepth = MTLDepthStencilDescriptor()
@@ -141,10 +158,12 @@ final class GlobeRenderer {
         self.device = device
         self.queue = queue
         snowCover = SnowCover(device: device)
+        cloudShell = CloudShell(device: device)
         self.pipeline = pipeline
         self.effectsPipeline = effectsPipeline
         self.meshPipelines = meshPipelines
         self.backgroundPipelines = backgroundPipelines
+        self.cloudPipelines = cloudPipelines
         self.meshDepthState = meshDepthState
         self.backgroundDepthState = backgroundDepthState
         self.reliefPipeline = reliefPipeline
@@ -308,6 +327,7 @@ final class GlobeRenderer {
             encoder.setFragmentTexture(mesh.coast, index: 2)
             encoder.setFragmentTexture(mesh.relief, index: 3)
             encoder.setFragmentTexture(snowCover?.texture ?? placeholder, index: 4)
+            encoder.setFragmentTexture(weatherTexture(for: frame.weather), index: 5)
             encoder.setFragmentSamplerState(surfaceSampler, index: 0)
             for (slot, var nodes) in shape.surface.nodes(in: frame).enumerated() where !nodes.isEmpty {
                 var terrain = mesh.uniforms(for: shape, grid: ToySurface.grids[slot])
@@ -328,9 +348,38 @@ final class GlobeRenderer {
                     instanceCount: nodes.count
                 )
             }
+            if let name = look.clouds, frame.weather != nil, let clouds = cloudPipelines[name], let cloudShell {
+                var shell = CloudShell.uniforms
+                encoder.setRenderPipelineState(clouds)
+                encoder.setVertexBuffer(cloudShell.directions, offset: 0, index: 1)
+                encoder.setVertexBytes(&shell, length: MemoryLayout<SIMD4<Float>>.stride, index: 3)
+                encoder.drawIndexedPrimitives(
+                    type: .triangle,
+                    indexCount: cloudShell.indexCount,
+                    indexType: .uint16,
+                    indexBuffer: cloudShell.indices,
+                    indexBufferOffset: 0
+                )
+            }
         }
         encoder.endEncoding()
         return true
+    }
+
+    private func weatherTexture(for frame: WeatherFrame?) -> MTLTexture {
+        guard let frame else { return placeholder }
+        if let weatherTexture, weatherTexture.frame === frame {
+            return weatherTexture.texture
+        }
+        let descriptor = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: .rgba8Unorm, width: CloudMap.width, height: CloudMap.height, mipmapped: false)
+        descriptor.usage = [.shaderRead]
+        descriptor.storageMode = .shared
+        guard let texture = device.makeTexture(descriptor: descriptor) else { return placeholder }
+        frame.map.texels.withUnsafeBytes { bytes in
+            texture.replace(region: MTLRegionMake2D(0, 0, CloudMap.width, CloudMap.height), mipmapLevel: 0, withBytes: bytes.baseAddress!, bytesPerRow: CloudMap.width * 4)
+        }
+        weatherTexture = (frame, texture)
+        return texture
     }
 
     private func encodeRelief(_ shape: ToyMesh.Shape, of mesh: ToyMesh, commandBuffer: MTLCommandBuffer) {

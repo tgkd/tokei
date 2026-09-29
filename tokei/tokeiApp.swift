@@ -4,12 +4,14 @@ import SwiftUI
 struct TokeiApp: App {
     @State private var store = ClockStore()
     @State private var scene = SceneModel()
+    @State private var weather = WeatherFeed()
 
     var body: some Scene {
         WindowGroup {
             RootView()
                 .environment(store)
                 .environment(scene)
+                .environment(weather)
                 .onOpenURL { url in
                     open(url)
                 }

@@ -153,10 +153,6 @@ static float4 bsplineSlopes(float t) {
     return float4(-s * s, t * (3.0 * t - 4.0), s * (4.0 - 3.0 * s), t * t) * 0.5;
 }
 
-static float4 snowLevels(float4 times, float clock, float recovery) {
-    return saturate((clock - times) / recovery);
-}
-
 static SnowField snowField(texture2d<float> snowTexture, sampler snowSampler, float2 uv, float clock, float recovery) {
     float2 size = float2(snowTexture.get_width(), snowTexture.get_height());
     float2 texel = uv * size - 0.5;
@@ -182,15 +178,6 @@ static SnowField snowField(texture2d<float> snowTexture, sampler snowSampler, fl
         }
     }
     return {value, float2(slopeX, slopeY) * size};
-}
-
-static float snowLevelBilinear(texture2d<float> snowTexture, sampler snowSampler, float2 uv, float clock, float recovery) {
-    float2 size = float2(snowTexture.get_width(), snowTexture.get_height());
-    float2 texel = uv * size - 0.5;
-    float2 base = floor(texel);
-    float2 t = texel - base;
-    float4 levels = snowLevels(snowTexture.gather(snowSampler, (base + 1.0) / size), clock, recovery);
-    return mix(mix(levels.w, levels.z, t.x), mix(levels.x, levels.y, t.x), t.y);
 }
 
 static float kink(float track, float index, float seed) {

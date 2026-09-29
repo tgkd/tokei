@@ -226,6 +226,19 @@ static inline float snowFill(texture2d<float> snowTexture, sampler snowSampler, 
     return smoothstep(0.0, recovery, clock - snowTexture.sample(snowSampler, uv, level(0.0)).r);
 }
 
+static inline float4 snowLevels(float4 times, float clock, float recovery) {
+    return saturate((clock - times) / recovery);
+}
+
+static inline float snowLevelBilinear(texture2d<float> snowTexture, sampler snowSampler, float2 uv, float clock, float recovery) {
+    float2 size = float2(snowTexture.get_width(), snowTexture.get_height());
+    float2 texel = uv * size - 0.5;
+    float2 base = floor(texel);
+    float2 t = texel - base;
+    float4 levels = snowLevels(snowTexture.gather(snowSampler, (base + 1.0) / size), clock, recovery);
+    return mix(mix(levels.w, levels.z, t.x), mix(levels.x, levels.y, t.x), t.y);
+}
+
 static inline Cellular cellular(float2 point, float seed) {
     float2 base = floor(point);
     float2 local = point - base;

@@ -7,6 +7,7 @@ struct MarkerChip: View {
     let name: String
     let time: String
     let detail: String?
+    let weather: ChipWeather?
     let isSelected: Bool
     let isShifted: Bool
 
@@ -28,6 +29,20 @@ struct MarkerChip: View {
                 Text(detail)
                     .font(Font(fonts.detail))
                     .foregroundStyle(ink ?? chip.detailColor)
+            }
+            if let weather {
+                HStack(spacing: ChipMetrics.weatherSpacing) {
+                    Image(systemName: weather.symbol)
+                        .symbolRenderingMode(.hierarchical)
+                    if !weather.text.isEmpty {
+                        Text(weather.text)
+                            .monospacedDigit()
+                    }
+                }
+                .font(Font(fonts.detail))
+                .foregroundStyle(ink ?? chip.detailColor)
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(weather.accessibilityLabel)
             }
         }
         .lineLimit(1)

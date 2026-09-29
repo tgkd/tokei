@@ -22,6 +22,7 @@ enum ChipMetrics {
     private static let iceFonts = Fonts(SceneStyle.ice.interface.chip)
     private static let chromeFonts = Fonts(SceneStyle.chrome.interface.chip)
     private static let paperFonts = Fonts(SceneStyle.paper.interface.chip)
+    private static let weatherFonts = Fonts(SceneStyle.weather.interface.chip)
 
     static func fonts(for style: SceneStyle) -> Fonts {
         switch style {
@@ -30,6 +31,7 @@ enum ChipMetrics {
         case .ice: iceFonts
         case .chrome: chromeFonts
         case .paper: paperFonts
+        case .weather: weatherFonts
         }
     }
 
@@ -37,7 +39,9 @@ enum ChipMetrics {
         style.interface.chip.uppercasedName ? name.uppercased() : name
     }
 
-    static func size(name: String, time: String, detail: String?, style: SceneStyle) -> CGSize {
+    static let weatherSpacing: CGFloat = 4
+
+    static func size(name: String, time: String, detail: String?, weather: ChipWeather?, style: SceneStyle) -> CGSize {
         let chip = style.interface.chip
         let fonts = fonts(for: style)
         let nameWidth = width(of: displayName(name, style: style), font: fonts.name)
@@ -47,6 +51,12 @@ enum ChipMetrics {
         if let detail {
             width = max(width, self.width(of: detail, font: fonts.detail))
             height += chip.lineSpacing + ceil(fonts.detail.lineHeight)
+        }
+        if let weather {
+            let symbol = UIImage(systemName: weather.symbol, withConfiguration: UIImage.SymbolConfiguration(font: fonts.detail))?.size ?? .zero
+            let text = weather.text.isEmpty ? 0 : weatherSpacing + self.width(of: weather.text, font: fonts.detail)
+            width = max(width, ceil(symbol.width) + text)
+            height += chip.lineSpacing + ceil(max(fonts.detail.lineHeight, symbol.height))
         }
         return CGSize(
             width: ceil(width + chip.horizontalPadding * 2),

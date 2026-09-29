@@ -8,6 +8,7 @@ struct GlobeFrame: Equatable {
     var sun: SIMD3<Double>
     var style: SceneStyle
     var effects = EffectSnapshot.none
+    var weather: WeatherFrame?
 
     static func focalLength(for size: CGSize) -> Double {
         Double(min(size.width, size.height)) * 1.6
@@ -55,10 +56,14 @@ struct GlobeFrame: Equatable {
         dot(normalize(point), normalize(position - point))
     }
 
-    func surfacePoint(at location: CGPoint) -> SIMD3<Double>? {
+    var pickRadius: Double {
+        style.hasClouds ? 1 + CloudShell.lift(inflate: effects.inflate) : 1
+    }
+
+    func surfacePoint(at location: CGPoint, radius: Double = 1) -> SIMD3<Double>? {
         let ray = normalize(forward * focalLength + right * Double(location.x - center.x) - up * Double(location.y - center.y))
         let along = dot(position, ray)
-        let discriminant = along * along - dot(position, position) + 1
+        let discriminant = along * along - dot(position, position) + radius * radius
         guard discriminant >= 0 else { return nil }
         let distance = -along - sqrt(discriminant)
         guard distance > 0 else { return nil }

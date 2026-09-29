@@ -3,6 +3,7 @@ import SwiftUI
 struct GlobeScene: View {
     @Environment(SceneModel.self) private var scene
     @Environment(ClockStore.self) private var store
+    @Environment(WeatherFeed.self) private var weather
 
     let date: Date
     let isShifted: Bool
@@ -31,8 +32,10 @@ struct GlobeScene: View {
                     size: size,
                     sun: SolarPosition(date: date).direction,
                     style: scene.style,
-                    effects: scene.effects.snapshot(at: context.date, tuning: scene.style.effects)
+                    effects: scene.effects.snapshot(at: context.date, tuning: scene.style.effects),
+                    weather: scene.style.hasClouds ? weather.frame : nil
                 )
+                let clouds = CloudPresence(frame: frame, snow: scene.renderer?.snowCover)
                 let items = MarkerLayout.items(
                     zones: store.zones,
                     frame: frame,
@@ -41,13 +44,15 @@ struct GlobeScene: View {
                     selection: store.selection,
                     bounds: focusRect.insetBy(dx: 8, dy: 4),
                     surface: frame.style.mesh.flatMap { scene.renderer?.toyMesh?.shapes[$0.shape]?.surface },
+                    clouds: clouds,
+                    weatherStatus: weather.status,
                     cache: cache
                 )
                 ZStack(alignment: .topLeading) {
                     GlobeCanvas(frame: frame, renderer: scene.renderer, isReady: scene.isGlobeReady)
                         .gesture(
                             SpatialTapGesture().onEnded { value in
-                                select(near: value.location, in: items)
+                                select(near: value.location, in: items, frame: frame, clouds: clouds)
                             }
                         )
                     MarkerOverlay(items: items, selection: store.selection, isShifted: isShifted) { id in
@@ -150,7 +155,7 @@ struct GlobeScene: View {
     private func handle(_ event: GlobePressGesture.Event, frame: GlobeFrame) {
         switch event {
         case let .began(location):
-            let point = frame.surfacePoint(at: location)
+            let point = frame.surfacePoint(at: location, radius: frame.pickRadius)
             touch.begin(at: location, holds: point != nil && scene.allowsSurfaceDrag)
             if let point {
                 scene.press(at: point, footprint: footprint(in: frame))
@@ -167,9 +172,9 @@ struct GlobeScene: View {
     private func apply(_ step: GlobeTouch.Step?, at location: CGPoint, frame: GlobeFrame) {
         switch step {
         case .beginDrag:
-            scene.beginSurfaceDrag(at: frame.surfacePoint(at: location), footprint: footprint(in: frame), location: location)
+            scene.beginSurfaceDrag(at: frame.surfacePoint(at: location, radius: frame.pickRadius), footprint: footprint(in: frame), location: location)
         case .drag:
-            scene.dragSurface(to: frame.surfacePoint(at: location), location: location)
+            scene.dragSurface(to: frame.surfacePoint(at: location, radius: frame.pickRadius), location: location)
         case .endDrag:
             scene.endSurfaceDrag()
         case let .release(moved):
@@ -183,14 +188,17 @@ struct GlobeScene: View {
         16 / max(frame.globeRadius, 40)
     }
 
-    private func select(near location: CGPoint, in items: [MarkerItem]) {
+    private func select(near location: CGPoint, in items: [MarkerItem], frame: GlobeFrame, clouds: CloudPresence?) {
         let nearest = items
             .filter { $0.fade > 0.3 }
             .min { hypot($0.anchor.x - location.x, $0.anchor.y - location.y) < hypot($1.anchor.x - location.x, $1.anchor.y - location.y) }
         if let nearest, hypot(nearest.anchor.x - location.x, nearest.anchor.y - location.y) < 32 {
             store.toggleSelection(nearest.id)
-        } else {
-            store.selection = nil
+            return
+        }
+        store.selection = nil
+        if let clouds, let point = frame.surfacePoint(at: location, radius: frame.pickRadius), clouds.covers(point) {
+            scene.pop(at: point)
         }
     }
 }
