@@ -1,0 +1,12 @@
+{
+  "name": "tokei-site",
+  "private": true,
+  "packageManager": "yarn@4.17.0",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy"
+  },
+  "devDependencies": {
+    "wrangler": "^4.95.0"
+  }
+}

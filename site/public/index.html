@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tokei — World Clock Globe</title>
+<meta name="description" content="Tokei puts every city you care about on a living 3D globe with the real line between day and night. Slide time to see everyone's hour.">
+<link rel="icon" type="image/png" href="/favicon.png">
+<link rel="apple-touch-icon" href="/img/icon-180.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+<div class="page">
+<header class="header">
+<a class="brand" href="/"><img src="/img/icon-180.png" alt="">Tokei</a>
+<nav class="nav" aria-label="Legal">
+<a href="/privacy">Privacy</a>
+<a href="/terms">Terms</a>
+</nav>
+</header>
+
+<main>
+<section class="hero">
+<div class="hero-text">
+<p class="eyebrow">World clock for iPhone</p>
+<h1>Every time zone on one globe</h1>
+<p class="lead">Your cities sit on a 3D Earth with the real line between day and night sweeping across it. Slide time to see when a call works for everyone.</p>
+<p class="status">Coming soon to the App Store</p>
+</div>
+<div class="globe-column">
+<div class="globe-wrap">
+<canvas class="globe" aria-label="Paper-style globe with the live day and night line and four cities" role="img"></canvas>
+<div class="marker" data-zone="America/New_York" data-lat="40.71" data-lon="-74.01"><span class="marker-dot"></span><span class="marker-chip"><span class="marker-city">New York</span><span class="marker-time"></span></span></div>
+<div class="marker" data-zone="Europe/London" data-lat="51.51" data-lon="-0.13"><span class="marker-dot"></span><span class="marker-chip"><span class="marker-city">London</span><span class="marker-time"></span></span></div>
+<div class="marker" data-zone="Europe/Berlin" data-lat="52.52" data-lon="13.40"><span class="marker-dot"></span><span class="marker-chip"><span class="marker-city">Berlin</span><span class="marker-time"></span></span></div>
+<div class="marker" data-zone="Asia/Tokyo" data-lat="35.68" data-lon="139.69"><span class="marker-dot"></span><span class="marker-chip"><span class="marker-city">Tokyo</span><span class="marker-time"></span></span></div>
+</div>
+<div class="shifter">
+<span class="shifter-label">−24h</span>
+<input id="shift" type="range" min="-1440" max="1440" step="15" value="0" aria-label="Shift the displayed time">
+<span class="shifter-label">+24h</span>
+<button class="shifter-value" type="button" disabled>Now</button>
+</div>
+</div>
+</section>
+
+
+<ul class="features">
+<li>
+<h2>Slide time</h2>
+<p>Drag the time tape and the sun, every city clock and the widgets follow one displayed moment.</p>
+</li>
+<li>
+<h2>Six globes</h2>
+<p>From NASA satellite imagery to cut paper and chrome. Each theme restyles the whole app.</p>
+</li>
+<li>
+<h2>Widgets</h2>
+<p>A live day and night map on the Home Screen, compact clocks and Lock Screen widgets.</p>
+</li>
+<li>
+<h2>Private by design</h2>
+<p>No account, no tracking, no ads. Your cities stay on your device.</p>
+</li>
+</ul>
+</main>
+
+<footer class="footer">
+<span>© 2026 Tokei</span>
+<nav aria-label="Footer">
+<a href="/privacy">Privacy Policy</a>
+<a href="/terms">Terms of Use</a>
+<a href="mailto:tokei_app@proton.me">Contact</a>
+</nav>
+</footer>
+</div>
+<script src="/globe.js" type="module"></script>
+</body>
+</html>
