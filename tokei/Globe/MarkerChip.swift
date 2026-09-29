@@ -47,11 +47,10 @@ struct MarkerChip: View {
         }
         .lineLimit(1)
         .fixedSize()
-        .padding(.horizontal, chip.horizontalPadding)
-        .padding(.vertical, chip.verticalPadding)
+        .padding(ChipMetrics.padding(chip, isExpanded: detail != nil || weather != nil))
         .surface(
             filled ?? chip.surface,
-            in: RoundedRectangle(cornerRadius: chip.corner, style: .continuous),
+            in: RoundedRectangle(cornerRadius: ChipMetrics.corner(chip, isExpanded: detail != nil || weather != nil), style: .continuous),
             outline: isSelected && filled == nil ? accent : nil,
             outlineWidth: 1.25
         )

@@ -65,7 +65,7 @@ struct GlobeScene: View {
                 .simultaneousGesture(zoom)
                 .gesture(
                     GlobePressGesture { event in
-                        handle(event, frame: frame)
+                        handle(event, frame: frame, items: items)
                     }
                 )
             }
@@ -152,10 +152,10 @@ struct GlobeScene: View {
             }
     }
 
-    private func handle(_ event: GlobePressGesture.Event, frame: GlobeFrame) {
+    private func handle(_ event: GlobePressGesture.Event, frame: GlobeFrame, items: [MarkerItem]) {
         switch event {
         case let .began(location):
-            let point = frame.surfacePoint(at: location, radius: frame.pickRadius)
+            let point = marker(near: location, in: items) == nil ? frame.surfacePoint(at: location, radius: frame.pickRadius) : nil
             touch.begin(at: location, holds: point != nil && scene.allowsSurfaceDrag)
             if let point {
                 scene.press(at: point, footprint: footprint(in: frame))
@@ -188,11 +188,18 @@ struct GlobeScene: View {
         16 / max(frame.globeRadius, 40)
     }
 
+    private func marker(near location: CGPoint, in items: [MarkerItem]) -> MarkerItem? {
+        let visible = items.filter { $0.fade > 0.3 }
+        if let chip = visible.first(where: { $0.chipFrame?.contains(location) == true }) {
+            return chip
+        }
+        let nearest = visible.min { hypot($0.anchor.x - location.x, $0.anchor.y - location.y) < hypot($1.anchor.x - location.x, $1.anchor.y - location.y) }
+        guard let nearest, hypot(nearest.anchor.x - location.x, nearest.anchor.y - location.y) < 32 else { return nil }
+        return nearest
+    }
+
     private func select(near location: CGPoint, in items: [MarkerItem], frame: GlobeFrame, clouds: CloudPresence?) {
-        let nearest = items
-            .filter { $0.fade > 0.3 }
-            .min { hypot($0.anchor.x - location.x, $0.anchor.y - location.y) < hypot($1.anchor.x - location.x, $1.anchor.y - location.y) }
-        if let nearest, hypot(nearest.anchor.x - location.x, nearest.anchor.y - location.y) < 32 {
+        if let nearest = marker(near: location, in: items) {
             store.toggleSelection(nearest.id)
             return
         }

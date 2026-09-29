@@ -19,6 +19,9 @@ struct WeatherLook {
     float4 snow;
     float4 sleet;
     float4 halo;
+    float4 sand;
+    float4 frost;
+    float4 biome;
     float wrap;
     float shallowWidth;
     float coastWidth;
@@ -95,6 +98,7 @@ fragment half4 weatherFragment(MeshFragmentIn in [[stage_in]],
     float coastWidth = fwidth(coast);
     float lights = lightsTexture.sample(surfaceSampler, coordinates.uv, gradient).r;
     float halo = lightsTexture.sample(surfaceSampler, coordinates.uv, haloGradient).r;
+    float3 ground = dayTexture.sample(surfaceSampler, coordinates.uv, haloGradient).rgb;
     float water = 1.0 - coastCoverage(coast, coastWidth);
     float3 nM = normalize(mix(nMap, nG, water));
     float relief = saturate(normalHeight.w);
@@ -111,6 +115,11 @@ fragment half4 weatherFragment(MeshFragmentIn in [[stage_in]],
     float shallow = exp(-seaward / max(look.shallowWidth, 1e-3));
     float3 ocean = mix(look.oceanDeep.xyz, look.oceanShallow.xyz, shallow);
     float3 land = mix(look.landLow.xyz, look.landHigh.xyz, 0.6 * smoothstep(0.2, 1.0, relief));
+    float brightness = dot(ground, float3(0.2126, 0.7152, 0.0722));
+    float snowy = smoothstep(0.18, 0.4, min(ground.r, min(ground.g, ground.b)));
+    float sandy = smoothstep(-0.01, 0.04, ground.r - ground.g) * smoothstep(0.08, 0.2, brightness) * (1.0 - snowy);
+    land = mix(land, look.sand.xyz, sandy * look.biome.x);
+    land = mix(land, look.frost.xyz, snowy * look.biome.y);
     float shore = (1.0 - smoothstep(look.coastWidth * 0.5, look.coastWidth + coastWidth, abs(coast))) * saturate(look.coastWidth / max(coastWidth, 1e-4) - 0.5);
     float3 albedo = mix(mix(land, ocean, water), look.coast.xyz, shore * 0.55);
 

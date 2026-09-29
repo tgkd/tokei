@@ -40,6 +40,17 @@ enum ChipMetrics {
     }
 
     static let weatherSpacing: CGFloat = 4
+    static let expandedCorner: CGFloat = 16
+    static let expandedInset: CGFloat = 4
+
+    static func corner(_ chip: ChipLook, isExpanded: Bool) -> CGFloat {
+        isExpanded ? min(chip.corner, expandedCorner) : chip.corner
+    }
+
+    static func padding(_ chip: ChipLook, isExpanded: Bool) -> EdgeInsets {
+        let inset = isExpanded ? expandedInset : 0
+        return EdgeInsets(top: chip.verticalPadding + inset, leading: chip.horizontalPadding + inset, bottom: chip.verticalPadding + inset, trailing: chip.horizontalPadding + inset)
+    }
 
     static func size(name: String, time: String, detail: String?, weather: ChipWeather?, style: SceneStyle) -> CGSize {
         let chip = style.interface.chip
@@ -59,8 +70,8 @@ enum ChipMetrics {
             height += chip.lineSpacing + ceil(max(fonts.detail.lineHeight, symbol.height))
         }
         return CGSize(
-            width: ceil(width + chip.horizontalPadding * 2),
-            height: ceil(height + chip.verticalPadding * 2 + chip.surface.depth)
+            width: ceil(width + padding(chip, isExpanded: detail != nil || weather != nil).leading * 2),
+            height: ceil(height + padding(chip, isExpanded: detail != nil || weather != nil).top * 2 + chip.surface.depth)
         )
     }
 

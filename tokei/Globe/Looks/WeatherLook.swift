@@ -20,6 +20,9 @@ struct WeatherLook {
     var snow: SIMD4<Float>
     var sleet: SIMD4<Float>
     var halo: SIMD4<Float>
+    var sand: SIMD4<Float>
+    var frost: SIMD4<Float>
+    var biome: SIMD4<Float>
     var wrap: Float
     var shallowWidth: Float
     var coastWidth: Float
@@ -56,6 +59,9 @@ struct WeatherLook {
         snow: .linear(0xF4FAFF),
         sleet: .linear(0x9A8CF0),
         halo: .linear(0x5AA8F0),
+        sand: .linear(0xD9C98F),
+        frost: .linear(0xE8EEF2),
+        biome: SIMD4(0.55, 0.7, 0, 0),
         wrap: 0.45,
         shallowWidth: 0.55,
         coastWidth: 0.08,
