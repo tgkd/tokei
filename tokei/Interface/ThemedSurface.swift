@@ -58,6 +58,20 @@ struct ThemedSurface<S: InsettableShape>: ViewModifier {
                     stroke(outline)
                 }
                 .scaleEffect(isPressed ? 0.95 : 1)
+        case let .pixel(fill, edge, shadow, depth):
+            content
+                .background {
+                    shape.fill(fill)
+                }
+                .overlay {
+                    shape.strokeBorder(outline ?? edge, lineWidth: 2)
+                }
+                .offset(x: isPressed ? depth : 0, y: isPressed ? depth : 0)
+                .background {
+                    shape.fill(shadow)
+                        .offset(x: depth, y: depth)
+                }
+                .padding(.bottom, depth)
         case let .paper(fill, edge, shadow):
             content
                 .background {

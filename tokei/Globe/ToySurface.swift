@@ -116,8 +116,8 @@ struct ToySurface {
                 let table = bends[node.level - coarseness + 2]
                 bend += Double(table.maximum(Int(max(lower, 0)), Int(min(upper, Double(last))))) * view.inflate
             }
-            let lift = bend * obliquity / Self.tolerance
-            let drift = 0.75 * cell / Self.placement
+            let lift = bend * obliquity / view.tolerance
+            let drift = 0.75 * cell / view.placement
             return scale * min(lift, drift)
         }
         if node.level < Self.deepestLevel && error(grid: 16, coarseness: 0) > 1 {
@@ -277,6 +277,8 @@ private struct TerrainView {
     let curvature: Double
     let inflate: Double
     let crest: Double
+    let tolerance: Double
+    let placement: Double
     private let eyeX: Double
     private let eyeY: Double
     private let eyeZ: Double
@@ -299,6 +301,9 @@ private struct TerrainView {
         eyeZ = eye.z
         eyeDistance = length(eye)
         focal = frame.focalLength
+        let pixelSize = frame.style.mesh?.pixelSize ?? 0
+        tolerance = max(ToySurface.tolerance, pixelSize * 0.5)
+        placement = max(ToySurface.placement, pixelSize * 0.75)
         curvature = 1 + bend
         inflate = max(effects.inflate, 1)
         self.crest = lifted

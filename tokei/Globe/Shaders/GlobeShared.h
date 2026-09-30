@@ -40,6 +40,15 @@ struct MeshFragmentIn {
     float3 spherePosition;
 };
 
+struct PetalFragmentIn {
+    float4 position [[position]];
+    float3 worldPosition;
+    float3 normal;
+    float2 local;
+    float fade [[flat]];
+    float random [[flat]];
+};
+
 struct SurfaceCoordinates {
     float2 uv;
     float2 dx;
@@ -190,6 +199,20 @@ static inline half4 finishColor(float3 color, float2 pixel) {
     color = encodeSRGB(tonemap(color));
     float noise = (hash12(pixel) + hash12(pixel + 71.3) - 1.0) / 255.0;
     return half4(half3(color + noise), 1.0h);
+}
+
+static inline float4 projectToClip(float3 worldPosition, constant GlobeUniforms &uniforms) {
+    float3 offset = worldPosition - uniforms.cameraPosition.xyz;
+    float depth = dot(offset, uniforms.cameraForward.xyz);
+    float focal = uniforms.viewport.z;
+    float2 pixel = float2(uniforms.principal.x + focal * dot(offset, uniforms.cameraRight.xyz) / depth,
+                          uniforms.principal.y - focal * dot(offset, uniforms.cameraUp.xyz) / depth);
+    float2 ndc = float2(pixel.x / uniforms.viewport.x * 2.0 - 1.0,
+                       1.0 - pixel.y / uniforms.viewport.y * 2.0);
+    float distance = length(uniforms.cameraPosition.xyz);
+    float near = max(distance - 1.1, 0.05);
+    float far = distance + 1.1;
+    return float4(ndc * depth, far * (depth - near) / (far - near), depth);
 }
 
 static inline float3 globeRay(float2 pixel, float focal, constant GlobeUniforms &uniforms) {

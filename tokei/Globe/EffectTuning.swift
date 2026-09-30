@@ -44,6 +44,26 @@ struct EffectTuning {
         var grainSharpness = 0.45
     }
 
+    struct Petals {
+        var lifetime: Double
+        var stagger: Double
+        var size: Double
+        var fall: Double
+        var drag: Double
+        var launch: Double
+        var flutter: Double
+        var spin: Double
+        var lift: Double
+        var shower: Int
+        var showerDelay: Double
+        var pop: Int
+        var flingPerSpeed: Double
+        var flingMaximum: Int
+        var stroke: Int
+        var strokeSpacing: Double
+        var windPerSpeed: Double
+    }
+
     var press: Press
     var pop: Pop
     var ripple: Ripple
@@ -51,4 +71,5 @@ struct EffectTuning {
     var flightArc: Double
     var inflate: Spring?
     var drag = Drag()
+    var petals: Petals?
 }

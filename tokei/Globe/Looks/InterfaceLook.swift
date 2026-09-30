@@ -27,6 +27,10 @@ extension SceneStyle {
         case .chrome: .chrome
         case .paper: .paper
         case .weather: .weather
+        case .sakura: .sakura
+        case .magma: .magma
+        case .abyss: .abyss
+        case .pixel: .pixel
         }
     }
 }
@@ -410,14 +414,14 @@ extension InterfaceLook {
         )
     }()
 
-    private static func legibleInk(on color: Color, dark: Color = Color(hex: 0x121212), light: Color = .white) -> Color {
+    static func legibleInk(on color: Color, dark: Color = Color(hex: 0x121212), light: Color = .white) -> Color {
         let resolved = color.resolve(in: EnvironmentValues())
         let luminance = 0.2126 * resolved.linearRed + 0.7152 * resolved.linearGreen + 0.0722 * resolved.linearBlue
         return luminance > 0.179 ? dark : light
     }
 }
 
-private extension Color {
+extension Color {
     func tone(saturation: Double, brightness: Double) -> Color {
         let resolved = resolve(in: EnvironmentValues())
         let red = Double(resolved.red)

@@ -33,7 +33,8 @@ struct GlobeScene: View {
                     sun: SolarPosition(date: date).direction,
                     style: scene.style,
                     effects: scene.effects.snapshot(at: context.date, tuning: scene.style.effects),
-                    weather: scene.style.hasClouds ? weather.frame : nil
+                    weather: scene.style.hasClouds ? weather.frame : nil,
+                    petals: scene.style.mesh?.petals == nil ? [] : scene.effects.petalFlights(at: context.date, tuning: scene.style.effects)
                 )
                 let clouds = CloudPresence(frame: frame, snow: scene.renderer?.snowCover)
                 let items = MarkerLayout.items(
@@ -55,6 +56,13 @@ struct GlobeScene: View {
                                 select(near: value.location, in: items, frame: frame, clouds: clouds)
                             }
                         )
+                    if let drift = scene.style.look.petalDrift, scene.isGlobeReady {
+                        PetalDrift(look: drift, isEnabled: !scene.reduceMotion)
+                            .frame(width: focusRect.width, height: focusRect.height)
+                            .offset(x: focusRect.minX, y: focusRect.minY)
+                            .allowsHitTesting(false)
+                            .transition(.opacity)
+                    }
                     MarkerOverlay(items: items, selection: store.selection, isShifted: isShifted) { id in
                         store.toggleSelection(id)
                     }

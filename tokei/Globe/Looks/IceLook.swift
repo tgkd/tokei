@@ -80,7 +80,7 @@ extension SceneLook {
         mesh: MeshLook(
             fragment: "iceFragment",
             background: "iceBackground",
-            shape: .glacier,
+            shape: .stepped,
             parameters: IceLook.standard,
             snow: SnowSettings(recovery: Double(IceLook.standard.snowRecovery))
         )

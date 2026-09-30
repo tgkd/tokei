@@ -22,10 +22,19 @@ struct FeedbackCue: Equatable {
         case .dayTick: .impact(flexibility: .rigid, intensity: 0.7)
         case .press: .impact(flexibility: .soft, intensity: 0.5)
         case .release: nil
-        case .pop: style == .ice ? .impact(flexibility: .rigid, intensity: 0.85) : .impact(weight: .medium, intensity: 0.8)
+        case .pop: popHaptic
         case .snap: .impact(flexibility: .rigid, intensity: 0.9)
         case .inflate: .impact(flexibility: .soft, intensity: 1)
         case .carve: .impact(flexibility: .soft, intensity: 0.35)
+        }
+    }
+
+    private var popHaptic: SensoryFeedback {
+        switch style {
+        case .ice, .pixel: .impact(flexibility: .rigid, intensity: 0.85)
+        case .sakura: .impact(flexibility: .soft, intensity: 0.55)
+        case .magma: .impact(weight: .heavy, intensity: 0.9)
+        default: .impact(weight: .medium, intensity: 0.8)
         }
     }
 }

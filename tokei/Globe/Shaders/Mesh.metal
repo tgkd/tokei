@@ -24,20 +24,6 @@ constant float3 faceNormals[6] = {float3(1, 0, 0), float3(-1, 0, 0), float3(0, 1
 constant float3 faceUs[6] = {float3(0, 1, 0), float3(0, 0, 1), float3(0, 0, 1), float3(1, 0, 0), float3(1, 0, 0), float3(0, 1, 0)};
 constant float3 faceVs[6] = {float3(0, 0, 1), float3(0, 1, 0), float3(1, 0, 0), float3(0, 0, 1), float3(0, 1, 0), float3(1, 0, 0)};
 
-static float4 projectToClip(float3 worldPosition, constant GlobeUniforms &uniforms) {
-    float3 offset = worldPosition - uniforms.cameraPosition.xyz;
-    float depth = dot(offset, uniforms.cameraForward.xyz);
-    float focal = uniforms.viewport.z;
-    float2 pixel = float2(uniforms.principal.x + focal * dot(offset, uniforms.cameraRight.xyz) / depth,
-                          uniforms.principal.y - focal * dot(offset, uniforms.cameraUp.xyz) / depth);
-    float2 ndc = float2(pixel.x / uniforms.viewport.x * 2.0 - 1.0,
-                       1.0 - pixel.y / uniforms.viewport.y * 2.0);
-    float distance = length(uniforms.cameraPosition.xyz);
-    float near = max(distance - 1.1, 0.05);
-    float far = distance + 1.1;
-    return float4(ndc * depth, far * (depth - near) / (far - near), depth);
-}
-
 static float placedRadius(float3 direction, float lift, constant EffectUniforms &effects) {
     if (effectsActive(effects)) {
         float3 slope;

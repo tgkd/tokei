@@ -326,6 +326,23 @@ static float paperConfetti(float2 offset, float size, bool star) {
     return (sqrt(folded.x) + sqrt(folded.y) - 1.0) * size * 1.2;
 }
 
+static float3 paperConfettiLayer(float3 color, float2 point, float cellSize, float chance, float sizeScale, float seed,
+                                 float fade, float castAmount, float scale, constant PaperLook &look) {
+    float2 cell = floor(point / cellSize);
+    float3 random = hash33(float3(cell, seed));
+    if (random.x >= chance) {
+        return color;
+    }
+    float2 center = (cell + 0.2 + 0.6 * hash33(float3(cell, seed + 12.0)).xy) * cellSize;
+    float size = (3.5 + 4.0 * random.y) * scale * sizeScale;
+    float3 tint = random.z < 0.34 ? look.landLow.xyz : (random.z < 0.67 ? look.seaShallow.xyz : look.landHigh.xyz);
+    bool star = hash12(cell + 3.7 + (seed - 7.0)) < 0.35;
+    float cast = saturate(0.5 - paperConfetti(point - center - float2(1.4, 2.0) * scale * sizeScale, size, star));
+    float confetti = saturate(0.5 - paperConfetti(point - center, size, star));
+    color = mix(color, color * 0.82, 0.7 * cast * castAmount);
+    return mix(color, mix(tint, look.backdrop.xyz, fade), confetti);
+}
+
 fragment half4 paperBackground(FullscreenVertex in [[stage_in]],
                                constant GlobeUniforms &uniforms [[buffer(0)]],
                                constant PaperLook &look [[buffer(1)]]) {
@@ -340,19 +357,13 @@ fragment half4 paperBackground(FullscreenVertex in [[stage_in]],
     color *= mix(1.02, 0.9, smoothstep(0.3, 0.85, length(screen)));
     float shadowReach = length(pixel - disk.xy - float2(0.05, 0.09) * disk.z) / disk.z;
     color = mix(color, look.shade.xyz * 0.85, 0.4 * (1.0 - smoothstep(0.9, 1.14, shadowReach)));
-    float cellSize = 96.0 * scale;
-    float2 cell = floor(pixel / cellSize);
-    float3 random = hash33(float3(cell, 7.0));
-    if (random.x < 0.32) {
-        float2 center = (cell + 0.2 + 0.6 * hash33(float3(cell, 19.0)).xy) * cellSize;
-        float size = (3.5 + 4.0 * random.y) * scale;
-        float3 tint = random.z < 0.34 ? look.landLow.xyz : (random.z < 0.67 ? look.seaShallow.xyz : look.landHigh.xyz);
-        bool star = hash12(cell + 3.7) < 0.35;
-        float cast = saturate(0.5 - paperConfetti(pixel - center - float2(1.4, 2.0) * scale, size, star));
-        float confetti = saturate(0.5 - paperConfetti(pixel - center, size, star));
-        color = mix(color, color * 0.82, 0.7 * cast);
-        color = mix(color, tint, confetti);
-    }
+    float3 eye = uniforms.cameraPosition.xyz;
+    float eyeDistance = max(length(eye), 1.0);
+    float2 turn = float2(-atan2(eye.x, eye.z), asin(clamp(eye.y / eyeDistance, -1.0, 1.0))) / (2.0 * M_PI_F);
+    float farCell = 64.0 * scale * pow(3.85 / eyeDistance, 0.1);
+    color = paperConfettiLayer(color, pixel + turn * farCell * 4.0, farCell, 0.22, 0.6, 31.0, 0.45, 0.0, scale, look);
+    float nearCell = 96.0 * scale * pow(3.85 / eyeDistance, 0.2);
+    color = paperConfettiLayer(color, pixel + turn * nearCell * 10.0, nearCell, 0.32, 1.0, 7.0, 0.0, 1.0, scale, look);
     color = mix(look.backdrop.xyz, color, uniforms.principal.z);
     return finishColor(color, pixel);
 }

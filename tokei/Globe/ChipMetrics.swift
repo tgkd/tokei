@@ -23,6 +23,10 @@ enum ChipMetrics {
     private static let chromeFonts = Fonts(SceneStyle.chrome.interface.chip)
     private static let paperFonts = Fonts(SceneStyle.paper.interface.chip)
     private static let weatherFonts = Fonts(SceneStyle.weather.interface.chip)
+    private static let sakuraFonts = Fonts(SceneStyle.sakura.interface.chip)
+    private static let magmaFonts = Fonts(SceneStyle.magma.interface.chip)
+    private static let abyssFonts = Fonts(SceneStyle.abyss.interface.chip)
+    private static let pixelFonts = Fonts(SceneStyle.pixel.interface.chip)
 
     static func fonts(for style: SceneStyle) -> Fonts {
         switch style {
@@ -32,6 +36,10 @@ enum ChipMetrics {
         case .chrome: chromeFonts
         case .paper: paperFonts
         case .weather: weatherFonts
+        case .sakura: sakuraFonts
+        case .magma: magmaFonts
+        case .abyss: abyssFonts
+        case .pixel: pixelFonts
         }
     }
 

@@ -84,6 +84,7 @@ struct SceneEffects: Equatable {
     var fling: Fling?
     var inflateStart: Date?
     var snow: Snow?
+    var petals: [PetalBurst] = []
 
     enum Cadence {
         case moving
@@ -92,12 +93,12 @@ struct SceneEffects: Equatable {
     }
 
     var isEmpty: Bool {
-        press == nil && pop == nil && fling == nil && inflateStart == nil && snow == nil
+        press == nil && pop == nil && fling == nil && inflateStart == nil && snow == nil && petals.isEmpty
     }
 
     var cadence: Cadence {
         let pressMoves = press.map { $0.release != nil || !$0.isAtRest } ?? false
-        if pressMoves || pop != nil || fling != nil || inflateStart != nil {
+        if pressMoves || pop != nil || fling != nil || inflateStart != nil || !petals.isEmpty {
             return .moving
         }
         return snow == nil ? .still : .refilling
@@ -175,6 +176,11 @@ struct SceneEffects: Equatable {
         if let snow, snow.until <= date {
             settled.snow = nil
         }
+        if let petalTuning = tuning.petals {
+            settled.petals.removeAll { $0.end(tuning: petalTuning) <= date }
+        } else {
+            settled.petals.removeAll()
+        }
         return settled
     }
 
@@ -186,6 +192,7 @@ struct SceneEffects: Equatable {
             fling.map { $0.start.addingTimeInterval(tuning.fling.spring.settlingDuration) },
             inflateStart.map { $0.addingTimeInterval(tuning.inflate?.settlingDuration ?? 0) },
             snow?.until,
+            petalEnd(tuning: tuning),
         ]
     }
 

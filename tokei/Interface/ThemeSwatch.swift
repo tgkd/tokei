@@ -19,7 +19,9 @@ struct ThemeSwatch: View {
             var surface = context
             surface.clip(to: disk)
             if let land {
-                let image = surface.resolve(Image(decorative: land, scale: 1))
+                let isPixel = look.finish == .pixel
+                let decorative = Image(decorative: isPixel ? PixelSwatch.pixelated(land) ?? land : land, scale: 1)
+                let image = surface.resolve(isPixel ? decorative.interpolation(.none) : decorative)
                 if look.finish == .paper {
                     var shadow = surface
                     shadow.opacity = 0.2
@@ -63,6 +65,14 @@ struct ThemeSwatch: View {
                 let center = CGPoint(x: rect.minX + sparkle.x * unit, y: rect.minY + sparkle.y * unit)
                 context.fill(star(at: center, radius: sparkle.size * unit), with: .color(.white.opacity(0.95)))
             }
+        case .blossom:
+            SakuraSwatch.finish(in: context, rect: rect, unit: unit, look: look)
+        case .ember:
+            MagmaSwatch.finish(in: context, rect: rect, unit: unit, look: look)
+        case .glow:
+            AbyssSwatch.finish(in: context, rect: rect, unit: unit, look: look)
+        case .pixel:
+            PixelSwatch.finish(in: context, rect: rect, unit: unit, look: look)
         case .chrome:
             context.fill(Path(CGRect(x: rect.minX, y: rect.minY, width: rect.width, height: 52 * unit)), with: .color(.white.opacity(0.14)))
             context.fill(Path(CGRect(x: rect.minX, y: rect.minY + 56 * unit, width: rect.width, height: 44 * unit)), with: .color(.black.opacity(0.3)))
@@ -85,6 +95,14 @@ struct ThemeSwatch: View {
             context.stroke(Path(ellipseIn: rect.insetBy(dx: -0.5 * unit, dy: -0.5 * unit)), with: .color(.black.opacity(0.8)), lineWidth: unit)
         case .paper:
             context.stroke(Path(ellipseIn: rect.insetBy(dx: 0.4 * unit, dy: 0.4 * unit)), with: .color(look.rim), lineWidth: 0.8 * unit)
+        case .blossom:
+            SakuraSwatch.rim(in: context, rect: rect, unit: unit, look: look)
+        case .ember:
+            MagmaSwatch.rim(in: context, rect: rect, unit: unit, look: look)
+        case .glow:
+            AbyssSwatch.rim(in: context, rect: rect, unit: unit, look: look)
+        case .pixel:
+            PixelSwatch.rim(in: context, rect: rect, unit: unit, look: look)
         }
     }
 

@@ -40,7 +40,7 @@ final class SoundBoard {
     }
 
     func play(_ kind: FeedbackCue.Kind, timbre: SoundTimbre, volume: Float = 1) {
-        guard wantsRunning else { return }
+        guard wantsRunning, !timbre.silent.contains(kind) else { return }
         let now = ProcessInfo.processInfo.systemUptime
         guard let library = sounds[timbre] else {
             waiting = Request(kind: kind, timbre: timbre, volume: volume, time: now)

@@ -7,6 +7,7 @@ struct TapeLook: Equatable {
         case hairline
         case bar
         case pin
+        case pixel
     }
 
     var tick: Color

@@ -49,6 +49,36 @@ struct TapeNeedle: View {
                     .frame(width: 8, height: 8)
                     .padding(.top, -2)
             }
+        case .pixel:
+            PixelNeedle(color: accent)
+                .background {
+                    PixelNeedle(color: outline)
+                        .offset(x: 2, y: 2)
+                }
+        }
+    }
+}
+
+private struct PixelNeedle: View {
+    let color: Color
+
+    var body: some View {
+        VStack(spacing: 0) {
+            Rectangle()
+                .fill(color)
+                .frame(width: 12, height: 2)
+            Rectangle()
+                .fill(color)
+                .frame(width: 8, height: 2)
+            Rectangle()
+                .fill(color)
+                .frame(width: 4)
+            Rectangle()
+                .fill(color)
+                .frame(width: 8, height: 2)
+            Rectangle()
+                .fill(color)
+                .frame(width: 12, height: 2)
         }
     }
 }

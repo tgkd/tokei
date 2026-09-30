@@ -33,13 +33,23 @@ final class SceneModel {
     var isForeground = true {
         didSet {
             updateSound()
+            if !isForeground {
+                effects.petals = []
+            }
         }
     }
-    var reduceMotion = false
+    var reduceMotion = false {
+        didSet {
+            if reduceMotion {
+                effects.petals = []
+            }
+        }
+    }
     var effects = SceneEffects()
     @ObservationIgnored private var pressFootprint = FootprintShape.random(radius: 0.08)
     @ObservationIgnored private var pressPoint: SIMD3<Double>?
     @ObservationIgnored private var stroke: SurfaceStroke?
+    @ObservationIgnored private var petalTrail: SIMD3<Double>?
     private(set) var cue: FeedbackCue?
     private(set) var isGlobeReady = false
     private(set) var hasPlacedCamera = false
@@ -101,6 +111,9 @@ final class SceneModel {
         stampSnow(at: point, shape: FootprintShape.random(radius: 0.035))
         guard !reduceMotion else { return }
         effects.pop = SceneEffects.Pop(point: point, start: Date())
+        if let petals = style.effects.petals {
+            releasePetals(around: point, spread: 0.06, count: petals.pop)
+        }
     }
 
     func beginSurfaceDrag(at point: SIMD3<Double>?, footprint: Double, location: CGPoint) {
@@ -118,6 +131,7 @@ final class SceneModel {
             }
         }
         self.stroke = stroke
+        petalTrail = nil
         dragSurface(to: point, location: location)
     }
 
@@ -136,6 +150,7 @@ final class SceneModel {
                 press.pull(to: point, at: now, spring: tuning.follow)
                 effects.press = press
             }
+            brushPetals(at: point)
         } else {
             stroke.trail.last = nil
         }
@@ -156,6 +171,38 @@ final class SceneModel {
         }
     }
 
+    private func brushPetals(at point: SIMD3<Double>) {
+        guard let petals = style.effects.petals else { return }
+        guard let last = petalTrail else {
+            petalTrail = point
+            return
+        }
+        let travel = acos(min(max(dot(last, point), -1), 1))
+        guard travel >= petals.strokeSpacing else { return }
+        releasePetals(around: point, spread: petals.strokeSpacing * 0.6, count: petals.stroke, wind: normalize(point - last) * petals.windPerSpeed)
+        petalTrail = point
+    }
+
+    private func releasePetals(around origin: SIMD3<Double>, spread: Double, count: Int, wind: SIMD3<Double> = .zero, delay: Double = 0) {
+        guard !reduceMotion, style.mesh?.petals != nil, count > 0, effects.admits(petals: count) else { return }
+        let now = Date()
+        let view = camera(at: now)
+        let forward = -normalize(view.position)
+        let right = normalize(cross(forward, SIMD3(0, 1, 0)))
+        let up = cross(right, forward)
+        effects.petals.append(
+            PetalBurst(
+                origin: normalize(origin),
+                spread: spread,
+                down: -up,
+                wind: wind,
+                start: now.addingTimeInterval(delay),
+                count: count,
+                seed: UInt32.random(in: 0..<1024)
+            )
+        )
+    }
+
     private func stampSnow(at point: SIMD3<Double>, shape: FootprintShape) {
         guard let snow = style.mesh?.snow, snow.footprints, let snowCover = renderer?.snowCover else { return }
         let now = Date()
@@ -170,6 +217,12 @@ final class SceneModel {
 
     func fling(axis: SIMD3<Double>, speed: Double) {
         guard !reduceMotion, length(axis) > 1e-6 else { return }
+        if let petals = style.effects.petals {
+            let count = min(Int(speed * petals.flingPerSpeed), petals.flingMaximum)
+            if count >= 4 {
+                releasePetals(around: normalize(camera(at: Date()).position), spread: 1.1, count: count, wind: normalize(axis) * min(speed, 4) * petals.windPerSpeed)
+            }
+        }
         let tuning = style.effects.fling
         let stretch = min(speed * tuning.stretchPerSpeed, tuning.maximumStretch)
         guard stretch > 0.002 else { return }
@@ -179,7 +232,9 @@ final class SceneModel {
     private func resetDisturbance() {
         stroke = nil
         pressPoint = nil
+        petalTrail = nil
         effects.snow = nil
+        effects.petals = []
         renderer?.snowCover?.reset()
     }
 
@@ -204,6 +259,9 @@ final class SceneModel {
         }
         guard !reduceMotion, style.effects.inflate != nil else { return }
         effects.inflateStart = Date()
+        if let petals = style.effects.petals {
+            releasePetals(around: normalize(camera(at: Date()).position), spread: 1.2, count: petals.shower, delay: petals.showerDelay)
+        }
     }
 
     private func updateSound() {

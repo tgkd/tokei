@@ -4,19 +4,22 @@ struct SoundTimbre: Hashable, Sendable {
     let id: String
     let shape: @Sendable (FeedbackCue.Kind, SoundSynth.Voice) -> SoundSynth.Voice
     let design: (@Sendable (FeedbackCue.Kind, inout SoundSynth.Random) -> SoundSynth.Design?)?
+    let silent: Set<FeedbackCue.Kind>
     private let counts: [FeedbackCue.Kind: Int]
 
     init(id: String, shape: @escaping @Sendable (FeedbackCue.Kind, SoundSynth.Voice) -> SoundSynth.Voice) {
         self.id = id
         self.shape = shape
         design = nil
+        silent = []
         counts = [:]
     }
 
-    init(id: String, variants: [FeedbackCue.Kind: Int], design: @escaping @Sendable (FeedbackCue.Kind, inout SoundSynth.Random) -> SoundSynth.Design?) {
+    init(id: String, variants: [FeedbackCue.Kind: Int], silent: Set<FeedbackCue.Kind> = [], design: @escaping @Sendable (FeedbackCue.Kind, inout SoundSynth.Random) -> SoundSynth.Design?) {
         self.id = id
         shape = { _, voice in voice }
         self.design = design
+        self.silent = silent
         counts = variants
     }
 
@@ -98,7 +101,7 @@ enum SoundSynth {
 
     static func samples(timbre: SoundTimbre, rate: Double) -> [FeedbackCue.Kind: [[Float]]] {
         var library: [FeedbackCue.Kind: [[Float]]] = [:]
-        for (index, kind) in FeedbackCue.Kind.allCases.enumerated() {
+        for (index, kind) in FeedbackCue.Kind.allCases.enumerated() where !timbre.silent.contains(kind) {
             library[kind] = (0..<timbre.variants(of: kind)).map { variant in
                 var random = Random(seed: timbre.seed(kind: index, variant: variant))
                 if let design = timbre.design?(kind, &random) {

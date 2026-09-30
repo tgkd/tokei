@@ -9,6 +9,7 @@ struct SceneLook {
     let effects: EffectTuning
     let sound: SoundTimbre?
     let mesh: MeshLook?
+    var petalDrift: PetalDriftLook?
 
     var backdropColor: Color {
         Color(.sRGBLinear, red: Double(backdrop.x), green: Double(backdrop.y), blue: Double(backdrop.z))
@@ -27,18 +28,39 @@ struct SceneLook {
     }
 }
 
+struct PetalDriftLook {
+    let light: UInt32
+    let deep: UInt32
+    let rate: Float
+    let speed: CGFloat
+    let lifetime: Float
+}
+
 struct MeshLook {
     let fragment: String
     let background: String?
     let clouds: String?
+    let petals: String?
+    let pixelSize: Double?
     let shape: ToyShape
     let parameters: [UInt8]
     let snow: SnowSettings?
 
-    init<Parameters>(fragment: String, background: String? = nil, clouds: String? = nil, shape: ToyShape, parameters: Parameters, snow: SnowSettings? = nil) {
+    init<Parameters>(
+        fragment: String,
+        background: String? = nil,
+        clouds: String? = nil,
+        petals: String? = nil,
+        pixelSize: Double? = nil,
+        shape: ToyShape,
+        parameters: Parameters,
+        snow: SnowSettings? = nil
+    ) {
         self.fragment = fragment
         self.background = background
         self.clouds = clouds
+        self.petals = petals
+        self.pixelSize = pixelSize
         self.shape = shape
         self.parameters = withUnsafeBytes(of: parameters) { Array($0) }
         self.snow = snow

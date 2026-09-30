@@ -45,7 +45,7 @@ final class ToyMesh {
         }
         guard
             let url = resources.url("earth-water", "png"),
-            let terrain = ToyTerrain(waterMaskURL: url, device: device),
+            let terrain = ToyTerrain(waterMaskURL: url, elevationURL: resources.url("earth-elevation", "png"), device: device),
             let indexBuffer = indices.withUnsafeBytes({ device.makeBuffer(bytes: $0.baseAddress!, length: $0.count) }),
             let coast = makeTexture(format: .r16Float, width: terrain.coast.width, height: terrain.coast.height, usage: [.shaderRead], device: device),
             let relief = makeTexture(format: .rgba16Float, width: reliefWidth, height: reliefHeight, usage: [.shaderRead, .shaderWrite], device: device),

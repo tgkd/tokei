@@ -17,7 +17,7 @@ struct ToyTerrain {
     let tree: TerrainTree
     let field: TerrainField
 
-    init?(waterMaskURL: URL, device: MTLDevice) {
+    init?(waterMaskURL: URL, elevationURL: URL?, device: MTLDevice) {
         guard let water = Self.decodeGray(url: waterMaskURL) else { return nil }
         let width = water.width
         let height = water.height
@@ -32,7 +32,8 @@ struct ToyTerrain {
             height: height / 2,
             degree: degree / 2,
             coverage: Self.halve(Self.smoothstep(0.35, 0.55, blurred), width: width, height: height),
-            distance: Self.halve(distance, width: width, height: height)
+            distance: Self.halve(distance, width: width, height: height),
+            elevationURL: elevationURL
         )
     }
 
@@ -136,6 +137,62 @@ struct ToyTerrain {
             }
         }
         return result
+    }
+
+    static func decodeElevation(url: URL, width: Int, height: Int) -> [Float]? {
+        guard
+            let source = CGImageSourceCreateWithURL(url as CFURL, nil),
+            let image = CGImageSourceCreateImageAtIndex(source, 0, nil),
+            image.width >= width,
+            image.height >= height
+        else { return nil }
+        let sourceWidth = image.width
+        let sourceHeight = image.height
+        var pixels = [UInt8](repeating: 0, count: sourceWidth * sourceHeight)
+        let drawn = pixels.withUnsafeMutableBytes { buffer -> Bool in
+            guard
+                let context = CGContext(
+                    data: buffer.baseAddress,
+                    width: sourceWidth,
+                    height: sourceHeight,
+                    bitsPerComponent: 8,
+                    bytesPerRow: sourceWidth,
+                    space: CGColorSpaceCreateDeviceGray(),
+                    bitmapInfo: CGImageAlphaInfo.none.rawValue
+                )
+            else { return false }
+            context.interpolationQuality = .none
+            context.draw(image, in: CGRect(x: 0, y: 0, width: sourceWidth, height: sourceHeight))
+            return true
+        }
+        guard drawn else { return nil }
+        var elevation = [Float](repeating: 0, count: width * height)
+        pixels.withUnsafeBufferPointer { pixels in
+            var row = 0
+            while row < height {
+                let top = row * sourceHeight / height
+                let bottom = max((row + 1) * sourceHeight / height, top + 1)
+                var column = 0
+                while column < width {
+                    let left = column * sourceWidth / width
+                    let right = max((column + 1) * sourceWidth / width, left + 1)
+                    var peak: UInt8 = 0
+                    var y = top
+                    while y < bottom {
+                        var x = left
+                        while x < right {
+                            peak = max(peak, pixels[y * sourceWidth + x])
+                            x += 1
+                        }
+                        y += 1
+                    }
+                    elevation[row * width + column] = Float(peak) / 255
+                    column += 1
+                }
+                row += 1
+            }
+        }
+        return elevation
     }
 
     private static func decodeGray(url: URL) -> (land: [Float], width: Int, height: Int)? {
