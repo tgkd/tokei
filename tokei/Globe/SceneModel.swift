@@ -67,6 +67,7 @@ final class SceneModel {
     private(set) var marksRevision = 0
     var striking: UUID?
     @ObservationIgnored private var markStroke: MarkStroke?
+    @ObservationIgnored private var bloomStroke: BloomStroke?
     let renderer = GlobeRenderer()
     @ObservationIgnored private let feedback = FeedbackPlayer()
 
@@ -128,7 +129,7 @@ final class SceneModel {
 
     var allowsSurfaceDrag: Bool {
         guard let mesh = style.mesh else { return false }
-        return mesh.snow != nil || mesh.marks != nil || !reduceMotion
+        return mesh.snow != nil || mesh.marks != nil || mesh.blooms != nil || !reduceMotion
     }
 
     func press(at point: SIMD3<Double>, footprint: Double) {
@@ -143,6 +144,9 @@ final class SceneModel {
     }
 
     func releasePress(moved: Bool) {
+        if !moved, pressStart != nil, let pressPoint, let blooms = style.mesh?.blooms {
+            plantBlooms(blooms, at: pressPoint, radius: max(pressFootprint.radius * blooms.tuft, blooms.minimumTuft))
+        }
         cutPressIfReleasedEarly()
         guard var press = effects.press, press.release == nil else { return }
         let now = Date()
@@ -173,9 +177,8 @@ final class SceneModel {
             playSequence(popEcho)
         }
         stampSnow(at: point, shape: FootprintShape.random(radius: 0.035))
-        if let marks = style.mesh?.marks, let stamp = marks.pop, let markMap = renderer?.markMap {
-            markMap.stamp(stamp, at: point, peak: markPeak(marks, now: Date()))
-            marksRevision = markMap.revision
+        if let blooms = style.mesh?.blooms {
+            plantBlooms(blooms, at: point, radius: blooms.pop)
         }
         guard !reduceMotion else { return }
         effects.pop = SceneEffects.Pop(point: point, start: Date())
@@ -196,13 +199,16 @@ final class SceneModel {
             if let snow = style.mesh?.snow, let snowCover = renderer?.snowCover {
                 let hold = snow.recovery * tuning.trailHold
                 snowCover.stamp(at: pressPoint, shape: pressFootprint, recovery: snow.recovery, hold: hold, now: now)
-                extendSnow(from: snowCover, until: now.addingTimeInterval(snow.recovery + hold))
+                extendSnow(epoch: snowCover.epoch, until: now.addingTimeInterval(snow.recovery + hold))
             }
         }
         self.stroke = stroke
         petalTrail = nil
         if let marks = style.mesh?.marks {
             markStroke = MarkStroke(halfWidth: footprint * marks.width)
+        }
+        if let blooms = style.mesh?.blooms {
+            bloomStroke = BloomStroke(halfWidth: max(footprint * blooms.width, blooms.minimumWidth), last: stroke.trail.last)
         }
         dragSurface(to: point, location: location)
     }
@@ -215,13 +221,14 @@ final class SceneModel {
             if let snow = style.mesh?.snow, let snowCover = renderer?.snowCover {
                 let hold = snow.recovery * tuning.trailHold
                 snowCover.carve(from: stroke.trail.last ?? point, to: point, trail: stroke.trail, recovery: snow.recovery, hold: hold, now: now)
-                extendSnow(from: snowCover, until: now.addingTimeInterval(snow.recovery + hold))
+                extendSnow(epoch: snowCover.epoch, until: now.addingTimeInterval(snow.recovery + hold))
             }
             if let marks = style.mesh?.marks, let markMap = renderer?.markMap, var mark = markStroke {
-                markMap.sweep(to: point, stroke: &mark, brush: marks.drag, peak: markPeak(marks, now: now))
+                markMap.sweep(to: point, stroke: &mark, brush: marks.drag)
                 markStroke = mark
                 marksRevision = markMap.revision
             }
+            sweepBlooms(to: point, now: now)
             stroke.trail.advance(to: point)
             if var press = effects.press, press.release == nil {
                 press.pull(to: point, at: now, spring: tuning.follow)
@@ -231,6 +238,7 @@ final class SceneModel {
         } else {
             stroke.trail.last = nil
             markStroke?.last = nil
+            bloomStroke?.last = nil
         }
         if let strength = stroke.advance(to: location, at: now, onSurface: point != nil, spacing: tuning.grainSpacing) {
             feedback.grain(.carve, style: style, soundEnabled: soundEnabled, strength: strength)
@@ -243,6 +251,7 @@ final class SceneModel {
         stroke = nil
         cutPressIfReleasedEarly()
         markStroke = nil
+        bloomStroke = nil
         guard var press = effects.press, press.release == nil else { return }
         press.release = Date()
         effects.press = press
@@ -287,12 +296,41 @@ final class SceneModel {
         guard let snow = style.mesh?.snow, snow.footprints, let snowCover = renderer?.snowCover else { return }
         let now = Date()
         snowCover.stamp(at: point, shape: shape, recovery: snow.recovery, now: now)
-        extendSnow(from: snowCover, until: now.addingTimeInterval(snow.recovery))
+        extendSnow(epoch: snowCover.epoch, until: now.addingTimeInterval(snow.recovery))
     }
 
-    private func extendSnow(from snowCover: SnowCover, until end: Date) {
+    private func extendSnow(epoch: Date, until end: Date) {
         let until = max(effects.snow?.until ?? end, end)
-        effects.snow = SceneEffects.Snow(epoch: snowCover.epoch, until: until)
+        effects.snow = SceneEffects.Snow(epoch: epoch, until: until)
+    }
+
+    private func plantBlooms(_ blooms: BloomSettings, at point: SIMD3<Double>, radius: Double) {
+        guard let bloomField = renderer?.bloomField, isNearLand(point, within: radius) else { return }
+        let now = Date()
+        if effects.snow == nil {
+            bloomField.reset()
+        }
+        bloomField.stamp(at: point, radius: radius, timing: blooms.timing, now: now)
+        extendSnow(epoch: bloomField.epoch, until: now.addingTimeInterval(blooms.timing.span))
+    }
+
+    private func sweepBlooms(to point: SIMD3<Double>, now: Date) {
+        guard let blooms = style.mesh?.blooms, let bloomField = renderer?.bloomField, var bloom = bloomStroke else { return }
+        if isNearLand(point, within: bloom.halfWidth) {
+            if effects.snow == nil {
+                bloomField.reset()
+            }
+            bloomField.sweep(to: point, stroke: &bloom, timing: blooms.timing, now: now)
+            extendSnow(epoch: bloomField.epoch, until: now.addingTimeInterval(blooms.timing.span))
+        } else {
+            bloom.last = point
+        }
+        bloomStroke = bloom
+    }
+
+    private func isNearLand(_ point: SIMD3<Double>, within reach: Double) -> Bool {
+        guard let mesh = style.mesh, let coast = renderer?.toyMesh?.shapes[mesh.shape]?.surface.coast else { return true }
+        return coast.sample(point) > -reach * 180 / .pi
     }
 
     func fling(axis: SIMD3<Double>, speed: Double) {
@@ -319,6 +357,8 @@ final class SceneModel {
         markStroke = nil
         renderer?.markMap?.reset()
         marksRevision = renderer?.markMap?.revision ?? marksRevision
+        bloomStroke = nil
+        renderer?.bloomField?.reset()
     }
 
     func settleEffects() {
@@ -326,21 +366,8 @@ final class SceneModel {
         effects = effects.settled(at: Date(), tuning: style.effects)
         if hadSnow && effects.snow == nil {
             renderer?.snowCover?.reset()
-            if style.mesh?.marks?.recovery != nil, let markMap = renderer?.markMap {
-                markStroke?.last = nil
-                markMap.reset()
-                marksRevision = markMap.revision
-            }
+            renderer?.bloomField?.reset()
         }
-    }
-
-    private func markPeak(_ marks: MarkSettings, now: Date) -> Double? {
-        guard let recovery = marks.recovery, let snowCover = renderer?.snowCover else { return nil }
-        if effects.snow == nil {
-            snowCover.reset()
-        }
-        extendSnow(from: snowCover, until: now.addingTimeInterval(marks.hold + recovery))
-        return now.timeIntervalSince(snowCover.epoch) + marks.hold
     }
 
     func focus(on point: GeoPoint) {

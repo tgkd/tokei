@@ -104,7 +104,7 @@ extension SceneLook {
             background: "knitBackground",
             shape: .puffy,
             parameters: KnitLook.standard,
-            marks: MarkSettings(drag: .stitches(dash: 4, gap: 2.6), pop: nil, width: 0.1)
+            marks: MarkSettings(drag: .stitches(dash: 4, gap: 2.6), width: 0.1)
         )
     )
 }

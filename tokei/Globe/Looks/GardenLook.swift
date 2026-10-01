@@ -3,101 +3,194 @@ import simd
 
 struct GardenLook {
     var backdrop: SIMD4<Float>
-    var stain: SIMD4<Float>
-    var gravel: SIMD4<Float>
-    var gravelShade: SIMD4<Float>
-    var mica: SIMD4<Float>
-    var moss: SIMD4<Float>
-    var mossLight: SIMD4<Float>
-    var mossSheen: SIMD4<Float>
-    var nightMoss: SIMD4<Float>
-    var granite: SIMD4<Float>
-    var lichen: SIMD4<Float>
-    var pebble: SIMD4<Float>
+    var backdropShade: SIMD4<Float>
+    var backdropLight: SIMD4<Float>
+    var seaDeep: SIMD4<Float>
+    var seaOpen: SIMD4<Float>
+    var seaShallow: SIMD4<Float>
+    var seaNight: SIMD4<Float>
+    var glint: SIMD4<Float>
+    var lawnDeep: SIMD4<Float>
+    var lawn: SIMD4<Float>
+    var lawnLight: SIMD4<Float>
+    var lawnSun: SIMD4<Float>
+    var meadow: SIMD4<Float>
+    var sage: SIMD4<Float>
+    var hedge: SIMD4<Float>
+    var treeDark: SIMD4<Float>
+    var treeLight: SIMD4<Float>
+    var bush: SIMD4<Float>
+    var shore: SIMD4<Float>
+    var bladeDeep: SIMD4<Float>
+    var bladeTip: SIMD4<Float>
+    var leaf: SIMD4<Float>
+    var white: SIMD4<Float>
+    var butter: SIMD4<Float>
+    var rose: SIMD4<Float>
+    var poppy: SIMD4<Float>
+    var violet: SIMD4<Float>
+    var sky: SIMD4<Float>
+    var coral: SIMD4<Float>
+    var magenta: SIMD4<Float>
+    var eye: SIMD4<Float>
+    var eyeDark: SIMD4<Float>
     var moon: SIMD4<Float>
     var twilight: SIMD4<Float>
     var cityLight: SIMD4<Float>
-    var rakeSpacing: Float
-    var ringBand: Float
-    var grooveTilt: Float
-    var grooveShade: Float
-    var grainFine: Float
-    var grainCoarse: Float
-    var grainContrast: Float
-    var micaCell: Float
-    var micaChance: Float
-    var micaSharpness: Float
-    var pebbleBand: Float
-    var pebbleCell: Float
-    var rockLevel: Float
-    var mossSheenPower: Float
-    var mossSheenStrength: Float
+    var wrap: Float
+    var shallowWidth: Float
+    var shoreWidth: Float
+    var glintPower: Float
+    var glintStrength: Float
+    var lawnScale: Float
+    var grassScale: Float
+    var grassContrast: Float
+    var plotSize: Float
+    var plotWarp: Float
+    var pathChance: Float
+    var hedgeWidth: Float
+    var stripeWidth: Float
+    var stripeStrength: Float
+    var treeCell: Float
+    var treeChance: Float
+    var bushCell: Float
+    var bushChance: Float
+    var groveLevel: Float
+    var grassCell: Float
+    var grassChance: Float
+    var clusterCell: Float
+    var clusterChance: Float
+    var bouquetCell: Float
+    var bouquetChance: Float
+    var bouquetSize: Float
+    var bouquetDelay: Float
+    var coastMargin: Float
+    var grow: Float
+    var hold: Float
+    var hide: Float
+    var stagger: Float
+    var shadowLength: Float
+    var shadowStrength: Float
     var moonStrength: Float
     var terminatorWidth: Float
-    var pressBend: Float
-    var pressDepth: Float
-    var rippleGlint: Float
-    var stainCells: Float
-    var stainStrength: Float
-    var grainBackdrop: Float
-    var markRecovery: Float
+    var twilightWidth: Float
+    var cityGlow: Float
+    var haze: Float
+    var dappleCells: Float
+    var dappleStrength: Float
+    var grain: Float
+    var reserved1: Float = 0
+    var reserved2: Float = 0
 
     static let standard = GardenLook(
-        backdrop: .linear(0xCDB993),
-        stain: .linear(0xA88F62),
-        gravel: .linear(0xE4E1DA),
-        gravelShade: .linear(0xB9B4A8),
-        mica: .linear(0xFFFFFF),
-        moss: .linear(0x3F5A2C),
-        mossLight: .linear(0x5E7436),
-        mossSheen: .linear(0xA7B86A),
-        nightMoss: .linear(0x0E140C),
-        granite: .linear(0x807E77),
-        lichen: .linear(0xB5B08A),
-        pebble: .linear(0x6E6A60),
-        moon: .linear(0x8FA3C8),
-        twilight: .linear(0xE8A66B),
-        cityLight: .linear(0xFFB866),
-        rakeSpacing: 1.3,
-        ringBand: 7.8,
-        grooveTilt: 0.22,
-        grooveShade: 0.12,
-        grainFine: 0.06,
-        grainCoarse: 0.25,
-        grainContrast: 0.12,
-        micaCell: 0.15,
-        micaChance: 0.04,
-        micaSharpness: 400,
-        pebbleBand: 0.25,
-        pebbleCell: 0.12,
-        rockLevel: 0.4,
-        mossSheenPower: 4,
-        mossSheenStrength: 0.25,
-        moonStrength: 0.22,
-        terminatorWidth: 0.02,
-        pressBend: 0.6,
-        pressDepth: 0.02,
-        rippleGlint: 1.5,
-        stainCells: 6,
-        stainStrength: 0.18,
-        grainBackdrop: 0.03,
-        markRecovery: 6
+        backdrop: .linear(0xDDE7CF),
+        backdropShade: .linear(0xC9D8B6),
+        backdropLight: .linear(0xF3F6EA),
+        seaDeep: .linear(0x1B5A9A),
+        seaOpen: .linear(0x2A7BC0),
+        seaShallow: .linear(0x55C2D6),
+        seaNight: .linear(0x0A1830),
+        glint: .linear(0xFFFBEF),
+        lawnDeep: .linear(0x2F6E2A),
+        lawn: .linear(0x4F9A36),
+        lawnLight: .linear(0x86BE45),
+        lawnSun: .linear(0xB8D468),
+        meadow: .linear(0xA9C94F),
+        sage: .linear(0x7FA36A),
+        hedge: .linear(0x2C5E25),
+        treeDark: .linear(0x245520),
+        treeLight: .linear(0x6FAF42),
+        bush: .linear(0x8CC452),
+        shore: .linear(0xE3D6A2),
+        bladeDeep: .linear(0x2E7A26),
+        bladeTip: .linear(0xC4E672),
+        leaf: .linear(0x3B8A33),
+        white: .linear(0xFBF8F0),
+        butter: .linear(0xFFD447),
+        rose: .linear(0xF68FB2),
+        poppy: .linear(0xE8413A),
+        violet: .linear(0x9B7BE0),
+        sky: .linear(0x6CB6F2),
+        coral: .linear(0xFF8C5A),
+        magenta: .linear(0xD9418C),
+        eye: .linear(0xF6C431),
+        eyeDark: .linear(0x4A2C1A),
+        moon: .linear(0xA9BCE0),
+        twilight: .linear(0xF2A86B),
+        cityLight: .linear(0xFFD27A),
+        wrap: 0.3,
+        shallowWidth: 1.4,
+        shoreWidth: 0.22,
+        glintPower: 160,
+        glintStrength: 0.6,
+        lawnScale: 5,
+        grassScale: 250,
+        grassContrast: 0.12,
+        plotSize: 5,
+        plotWarp: 1.2,
+        pathChance: 0.3,
+        hedgeWidth: 0.07,
+        stripeWidth: 0.35,
+        stripeStrength: 0.06,
+        treeCell: 1.6,
+        treeChance: 0.7,
+        bushCell: 0.9,
+        bushChance: 0.45,
+        groveLevel: 0.42,
+        grassCell: 2.0,
+        grassChance: 0.85,
+        clusterCell: 3.8,
+        clusterChance: 0.8,
+        bouquetCell: 6.5,
+        bouquetChance: 1,
+        bouquetSize: 0.38,
+        bouquetDelay: 0.55,
+        coastMargin: 0.5,
+        grow: 0.7,
+        hold: 5,
+        hide: 1.2,
+        stagger: 0.4,
+        shadowLength: 0.25,
+        shadowStrength: 0.35,
+        moonStrength: 0.25,
+        terminatorWidth: 0.05,
+        twilightWidth: 0.2,
+        cityGlow: 0.9,
+        haze: 0.18,
+        dappleCells: 6,
+        dappleStrength: 0.12,
+        grain: 0.03
     )
+
+    var bloomTiming: BloomTiming {
+        BloomTiming(grow: Double(grow), hold: Double(hold), hide: Double(hide), stagger: Double(stagger + bouquetDelay) + 0.2)
+    }
+
+    var bouquetReach: Double {
+        Double(bouquetCell) * .pi / 180
+    }
 }
 
 extension SceneLook {
     static let garden = SceneLook(
         name: "Garden",
         backdrop: GardenLook.standard.backdrop.xyz,
-        accent: Color(red: 0.31, green: 0.42, blue: 0.18),
+        accent: Color(red: 0.27, green: 0.56, blue: 0.22),
         effects: .garden,
         sound: .garden,
         mesh: MeshLook(
             fragment: "gardenFragment",
             background: "gardenBackground",
-            shape: .stepped,
+            shape: .puffy,
             parameters: GardenLook.standard,
-            marks: MarkSettings(drag: .grooves(tines: 5), pop: .rings(radius: 0.05, spacing: 0.0125), width: 1.4, hold: 4, recovery: Double(GardenLook.standard.markRecovery))
+            blooms: BloomSettings(
+                timing: GardenLook.standard.bloomTiming,
+                width: 1.1,
+                tuft: 1,
+                pop: GardenLook.standard.bouquetReach * 0.85,
+                minimumWidth: GardenLook.standard.bouquetReach * 0.5,
+                minimumTuft: GardenLook.standard.bouquetReach * 0.85
+            )
         )
     )
 }
@@ -105,20 +198,20 @@ extension SceneLook {
 extension EffectTuning {
     static let garden = EffectTuning(
         press: Press(
-            dentDepth: 0.02,
-            dentRadius: 0.11,
-            dentShade: 3,
+            dentDepth: 0.015,
+            dentRadius: 0.1,
+            dentShade: 2,
             frost: 0,
             cracks: 0,
             squash: 0.006,
             pressSpring: Spring(duration: 0.2, bounce: 0),
-            releaseSpring: Spring(duration: 0.35, bounce: 0)
+            releaseSpring: Spring(duration: 0.45, bounce: 0.2)
         ),
-        pop: Pop(height: 0.008, radius: 0.04, glow: 0, spring: Spring(duration: 0.5, bounce: 0.1)),
-        ripple: Ripple(tilt: 0, landShare: 1, flash: 1, displacement: 0, wavelength: 0.04, speed: 0.45, decay: 1.2, duration: 1.6),
+        pop: Pop(height: 0.01, radius: 0.045, glow: 0, spring: Spring(duration: 0.5, bounce: 0.25)),
+        ripple: Ripple(tilt: 0.6, landShare: 0, flash: 0, displacement: 0, wavelength: 0.03, speed: 0.35, decay: 1.5, duration: 1.6),
         fling: Fling(stretchPerSpeed: 0.002, maximumStretch: 0.008, spring: Spring(duration: 0.4, bounce: 0.05)),
         flightArc: 0.4,
-        inflate: Spring(duration: 1.6, bounce: 0.05),
-        drag: .init(follow: Spring(duration: 0.18, bounce: 0), grainSpacing: 8, grainSharpness: 0.55)
+        inflate: Spring(duration: 1.6, bounce: 0.1),
+        drag: .init(follow: Spring(duration: 0.18, bounce: 0), grainSpacing: 10, grainSharpness: 0.4)
     )
 }

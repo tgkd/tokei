@@ -13,7 +13,7 @@ struct SwatchLook: Equatable {
         case glow
         case pixel
         case enamel
-        case raked
+        case flowers
         case tiles
         case yarn
     }

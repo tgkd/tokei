@@ -3,20 +3,12 @@ import Metal
 import simd
 
 enum MarkBrush: Equatable {
-    case grooves(tines: Int)
     case stitches(dash: Double, gap: Double)
-}
-
-enum MarkStamp: Equatable {
-    case rings(radius: Double, spacing: Double)
 }
 
 struct MarkSettings: Equatable {
     var drag: MarkBrush
-    var pop: MarkStamp?
     var width: Double
-    var hold = 0.0
-    var recovery: Double?
 }
 
 struct MarkStroke {
@@ -33,11 +25,9 @@ final class MarkMap {
     private static let overlap = 0.5
 
     let texture: MTLTexture
-    let fadeTexture: MTLTexture
     private(set) var revision = 0
     private var coverage: [Float16]
     private var phase: [Float16]
-    private var peaks: [Float16]
     private let columnSines: [Double]
     private let columnCosines: [Double]
     private let rowRings: [Double]
@@ -50,15 +40,10 @@ final class MarkMap {
         let descriptor = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: .rg16Float, width: Self.width, height: Self.height, mipmapped: false)
         descriptor.usage = [.shaderRead]
         descriptor.storageMode = .shared
-        let fadeDescriptor = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: .r16Float, width: Self.width, height: Self.height, mipmapped: false)
-        fadeDescriptor.usage = [.shaderRead]
-        fadeDescriptor.storageMode = .shared
-        guard let texture = device.makeTexture(descriptor: descriptor), let fadeTexture = device.makeTexture(descriptor: fadeDescriptor) else { return nil }
+        guard let texture = device.makeTexture(descriptor: descriptor) else { return nil }
         self.texture = texture
-        self.fadeTexture = fadeTexture
         coverage = [Float16](repeating: 0, count: Self.width * Self.height)
         phase = [Float16](repeating: 0, count: Self.width * Self.height)
-        peaks = [Float16](repeating: 0, count: Self.width * Self.height)
         let longitudes = (0..<Self.width).map { ((Double($0) + 0.5) / Double(Self.width) - 0.5) * 2 * .pi }
         columnSines = longitudes.map(sin)
         columnCosines = longitudes.map(cos)
@@ -68,7 +53,7 @@ final class MarkMap {
         upload(rows: 0...(Self.height - 1), columns: 0...(Self.width - 1))
     }
 
-    func sweep(to point: SIMD3<Double>, stroke: inout MarkStroke, brush: MarkBrush, peak: Double? = nil) {
+    func sweep(to point: SIMD3<Double>, stroke: inout MarkStroke, brush: MarkBrush) {
         guard let last = stroke.last else {
             stroke.last = point
             return
@@ -81,23 +66,11 @@ final class MarkMap {
         for piece in 1...pieces {
             let fraction = Double(piece) / Double(pieces)
             let to = piece == pieces ? point : normalize(last + (point - last) * fraction)
-            paintPiece(from: from, to: to, distance: stroke.distance + arc * Double(piece - 1) / Double(pieces), pieceArc: pieceArc, halfWidth: stroke.halfWidth, brush: brush, peak: peak)
+            paintPiece(from: from, to: to, distance: stroke.distance + arc * Double(piece - 1) / Double(pieces), pieceArc: pieceArc, halfWidth: stroke.halfWidth, brush: brush)
             from = to
         }
         stroke.distance += arc
         stroke.last = point
-        flush()
-        revision += 1
-    }
-
-    func stamp(_ stamp: MarkStamp, at center: SIMD3<Double>, peak: Double? = nil) {
-        guard case .rings(let radius, let spacing) = stamp else { return }
-        paint(around: center, reach: radius, peak: peak) { point in
-            let distance = acos(min(max(dot(point, center), -1), 1))
-            guard distance < radius else { return (0, 0) }
-            let amount = 1 - Self.smoothstep(radius - 0.15 * spacing, radius, distance)
-            return (amount, distance / spacing)
-        }
         flush()
         revision += 1
     }
@@ -110,14 +83,14 @@ final class MarkMap {
         revision += 1
     }
 
-    private func paintPiece(from start: SIMD3<Double>, to end: SIMD3<Double>, distance: Double, pieceArc: Double, halfWidth: Double, brush: MarkBrush, peak: Double?) {
+    private func paintPiece(from start: SIMD3<Double>, to end: SIMD3<Double>, distance: Double, pieceArc: Double, halfWidth: Double, brush: MarkBrush) {
         let axis = end - start
         let axisLengthSquared = dot(axis, axis)
         let crossing = cross(start, end)
         let side = length(crossing) > 1e-9 ? normalize(crossing) : Self.tangent(at: start)
         let spill = halfWidth * Self.overlap / max(axisLengthSquared.squareRoot(), 1e-9)
         let reach = axisLengthSquared.squareRoot() / 2 + halfWidth * (1 + Self.overlap)
-        paint(around: normalize(start + end), reach: reach, peak: peak) { point in
+        paint(around: normalize(start + end), reach: reach) { point in
             guard axisLengthSquared > 1e-18 else { return (0, 0) }
             let relative = point - start
             let along = dot(relative, axis) / axisLengthSquared
@@ -126,22 +99,18 @@ final class MarkMap {
             let across = dot(offset, side) / halfWidth
             guard abs(across) < 1 else { return (0, 0) }
             var amount = (1 - Self.smoothstep(0.8, 1, abs(across))) * Self.smoothstep(-spill, 0, along)
-            var value: Double
             switch brush {
-            case .grooves(let tines):
-                value = across * Double(tines) / 2
             case .stitches(let dash, let gap):
                 let s = distance + along * pieceArc
                 let period = (dash + gap) * halfWidth
                 let u = s.truncatingRemainder(dividingBy: period)
                 amount *= Self.smoothstep(0, 0.25 * halfWidth, u) * (1 - Self.smoothstep(dash * halfWidth - 0.25 * halfWidth, dash * halfWidth, u))
-                value = across
             }
-            return (amount, value)
+            return (amount, across)
         }
     }
 
-    private func paint(around center: SIMD3<Double>, reach: Double, peak: Double?, strength: (SIMD3<Double>) -> (Double, Double)) {
+    private func paint(around center: SIMD3<Double>, reach: Double, strength: (SIMD3<Double>) -> (Double, Double)) {
         let width = Self.width
         let latitude = asin(min(max(center.y, -1), 1))
         let longitude = atan2(center.x, center.z)
@@ -154,33 +123,27 @@ final class MarkMap {
         let columnReach = min(Int(reach / (2 * .pi) * Double(width) / max(cos(latitude) - sin(reach), 0.02)) + 2, width / 2)
         let firstColumn = ((centerColumn - columnReach) % width + width) % width
         let limit = cos(reach)
-        let stamped = peak.map { Float16($0) }
         coverage.withUnsafeMutableBufferPointer { cover in
             phase.withUnsafeMutableBufferPointer { phases in
-                peaks.withUnsafeMutableBufferPointer { times in
-                    for row in first...last {
-                        let ring = rowRings[row]
-                        let height = rowHeights[row]
-                        let rowStart = row * width
-                        for step in 0...(2 * columnReach) {
-                            var column = firstColumn + step
-                            if column >= width {
-                                column -= width
-                            }
-                            let point = SIMD3(ring * columnSines[column], height, ring * columnCosines[column])
-                            guard dot(point, center) > limit else { continue }
-                            let (amount, value) = strength(point)
-                            guard amount > 0 else { continue }
-                            let index = rowStart + column
-                            let oldCoverage = Double(cover[index])
-                            let newCoverage = amount + (1 - amount) * oldCoverage
-                            cover[index] = Float16(newCoverage)
-                            let oldPhase = Double(phases[index])
-                            phases[index] = Float16(amount * value + (1 - amount) * oldPhase)
-                            if let stamped, stamped > times[index] {
-                                times[index] = stamped
-                            }
+                for row in first...last {
+                    let ring = rowRings[row]
+                    let height = rowHeights[row]
+                    let rowStart = row * width
+                    for step in 0...(2 * columnReach) {
+                        var column = firstColumn + step
+                        if column >= width {
+                            column -= width
                         }
+                        let point = SIMD3(ring * columnSines[column], height, ring * columnCosines[column])
+                        guard dot(point, center) > limit else { continue }
+                        let (amount, value) = strength(point)
+                        guard amount > 0 else { continue }
+                        let index = rowStart + column
+                        let oldCoverage = Double(cover[index])
+                        let newCoverage = amount + (1 - amount) * oldCoverage
+                        cover[index] = Float16(newCoverage)
+                        let oldPhase = Double(phases[index])
+                        phases[index] = Float16(amount * value + (1 - amount) * oldPhase)
                     }
                 }
             }
@@ -191,12 +154,9 @@ final class MarkMap {
     private func clear(rows: ClosedRange<Int>) {
         coverage.withUnsafeMutableBufferPointer { cover in
             phase.withUnsafeMutableBufferPointer { phases in
-                peaks.withUnsafeMutableBufferPointer { times in
-                    for index in (rows.lowerBound * Self.width)..<((rows.upperBound + 1) * Self.width) {
-                        cover[index] = 0
-                        phases[index] = 0
-                        times[index] = 0
-                    }
+                for index in (rows.lowerBound * Self.width)..<((rows.upperBound + 1) * Self.width) {
+                    cover[index] = 0
+                    phases[index] = 0
                 }
             }
         }
@@ -244,16 +204,6 @@ final class MarkMap {
                 mipmapLevel: 0,
                 withBytes: base + columns.lowerBound * pixelStride,
                 bytesPerRow: width * pixelStride
-            )
-        }
-        let fadeStride = MemoryLayout<Float16>.stride
-        peaks.withUnsafeBytes { bytes in
-            guard let base = bytes.baseAddress else { return }
-            fadeTexture.replace(
-                region: MTLRegionMake2D(columns.lowerBound, rows.lowerBound, columns.count, rows.count),
-                mipmapLevel: 0,
-                withBytes: base + (rows.lowerBound * width + columns.lowerBound) * fadeStride,
-                bytesPerRow: width * fadeStride
             )
         }
     }

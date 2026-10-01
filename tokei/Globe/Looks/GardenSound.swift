@@ -19,144 +19,141 @@ enum GardenSound {
 
     static func design(for kind: FeedbackCue.Kind, random: inout SoundSynth.Random) -> SoundSynth.Design? {
         switch kind {
-        case .tick: bamboo(&random)
-        case .dayTick: shishi(&random)
-        case .press: crunch(&random)
-        case .release: pebbles(&random)
-        case .pop: drop(&random)
-        case .snap: clappers(&random)
-        case .inflate: suikinkutsu(&random)
-        case .carve: rake(&random)
+        case .tick: SoundSynth.Design(layers: [chirp(at: 0, pitch: random.between(3000...4000), gain: 0.5, random: &random)], level: -30)
+        case .dayTick: cuckoo(&random)
+        case .press: rustle(&random)
+        case .release: bud(&random)
+        case .pop: bloom(&random)
+        case .snap: tweet(&random)
+        case .inflate: morning(&random)
+        case .carve: swish(&random)
         }
     }
 
     static func contextual(_ kind: FeedbackCue.Kind, _ context: CueContext, random: inout SoundSynth.Random) -> SoundSynth.Design? {
         switch (kind, context.surface) {
-        case (.press, .land): pat(&random)
-        case (.press, .sea): crunch(&random)
+        case (.press, .land): rustle(&random)
+        case (.press, .sea): plip(&random)
         default: nil
         }
     }
 
-    private static func crunch(_ random: inout SoundSynth.Random) -> SoundSynth.Design {
-        SoundSynth.Design(
-            layers: [
-                Wash(attack: 0.002, decay: 0.02, frequency: 250, resonance: 0.9, gain: 0.4),
-                Grains(rise: 0.008, fall: 0.04, density: random.between(400...700), band: 1200...5000, cycles: 1...3, resonance: 1.4, grit: 2.5, gain: 1),
-            ],
-            level: -22,
-            floor: 100
+    private static func chirp(at time: Double, pitch: Double, gain: Double, random: inout SoundSynth.Random) -> Tone {
+        Tone(
+            voice: Voice(
+                startFrequency: pitch,
+                endFrequency: pitch * random.between(1.35...1.6),
+                glide: random.between(0.01...0.016),
+                vibratoDepth: 0.03,
+                vibratoRate: random.between(55...75),
+                vibratoDecay: 0.05,
+                attack: 0.003,
+                decay: random.between(0.018...0.028),
+                duration: 0.07,
+                gain: gain,
+                overtone: 0.05
+            ),
+            at: time
         )
     }
 
-    private static func pat(_ random: inout SoundSynth.Random) -> SoundSynth.Design {
-        SoundSynth.Design(
-            layers: [
-                Wash(attack: 0.006, decay: 0.05, frequency: random.between(160...240), resonance: 0.8, gain: 0.6),
-                Grains(rise: 0.006, fall: 0.05, density: 150, band: 2000...5000, cycles: 1...3, resonance: 0.9, grit: 1.5, gain: 0.15),
-            ],
-            level: -26
-        )
-    }
-
-    private static func pebbles(_ random: inout SoundSynth.Random) -> SoundSynth.Design {
-        var layers: [any SoundLayer] = []
-        let count = Int.random(in: 2...4, using: &random)
-        for _ in 0..<count {
-            layers.append(Ring(at: random.between(0.02...0.12), partials: [
-                Partial(frequency: random.between(2200...4000), decay: random.between(0.008...0.015), gain: random.between(0.4...0.6)),
-            ]))
-        }
-        return SoundSynth.Design(layers: layers, level: -30)
-    }
-
-    private static func drop(_ random: inout SoundSynth.Random) -> SoundSynth.Design {
-        SoundSynth.Design(
-            layers: [
-                Wash(attack: 0.002, decay: 0.025, frequency: 150, resonance: 1, gain: 0.7),
-                Grains(at: 0.01, rise: 0.005, fall: 0.05, density: 300, band: 1500...5000, cycles: 1...3, resonance: 1, grit: 2, gain: 0.6),
-                Wash(at: 0.05, attack: 0.08, decay: 0.12, frequency: 2000, sweep: 2, resonance: 0.6, gain: 0.12),
-            ],
-            level: -21
-        )
-    }
-
-    private static func rake(_ random: inout SoundSynth.Random) -> SoundSynth.Design {
-        var layers: [any SoundLayer] = [
-            Wash(attack: 0.004, decay: 0.03, frequency: 3000, resonance: 0.5, gain: 0.12),
+    private static func pluck(at time: Double, pitch: Double, gain: Double, random: inout SoundSynth.Random) -> [any SoundLayer] {
+        [
+            Wash(at: time, attack: 0.0002, decay: 0.0015, frequency: min(pitch * 4, 7000), resonance: 0.7, gain: gain * 0.25),
+            Ring(at: time, partials: [
+                Partial(frequency: pitch, decay: random.between(0.3...0.4), gain: gain),
+                Partial(frequency: pitch * 2.76, decay: 0.1, gain: gain * 0.3),
+                Partial(frequency: pitch * 5.4, decay: 0.04, gain: gain * 0.12),
+            ]),
         ]
-        let tines = Int.random(in: 3...5, using: &random)
-        var offset = 0.0
-        for _ in 0..<tines {
-            layers.append(Grains(at: offset, rise: 0.003, fall: 0.015, density: 900, band: 1500...6000, cycles: 1...3, resonance: 1.2, grit: 2, gain: 0.6))
-            offset += random.between(0.004...0.008)
-        }
-        return SoundSynth.Design(layers: layers, level: -26)
     }
 
-    private static func bamboo(_ random: inout SoundSynth.Random) -> SoundSynth.Design {
-        let pitch = random.between(1100...1500)
+    private static func rustle(_ random: inout SoundSynth.Random) -> SoundSynth.Design {
+        SoundSynth.Design(
+            layers: [
+                Wash(attack: 0.004, decay: 0.03, frequency: random.between(170...230), resonance: 0.8, gain: 0.35),
+                Grains(rise: 0.006, fall: 0.045, density: random.between(450...650), band: 1500...6000, cycles: 1...2, resonance: 0.8, grit: 1.5, gain: 0.8),
+            ],
+            level: -25
+        )
+    }
+
+    private static func plip(_ random: inout SoundSynth.Random) -> SoundSynth.Design {
+        let pitch = random.between(550...700)
         return SoundSynth.Design(
             layers: [
-                Wash(attack: 0.0001, decay: 0.0005, frequency: 4000, resonance: 0.7, gain: 0.3),
-                Ring(partials: [
-                    Partial(frequency: pitch, decay: random.between(0.012...0.025), gain: 1),
-                    Partial(frequency: pitch * 2.6, decay: 0.006, gain: 0.5),
-                ]),
+                Tone(voice: Voice(startFrequency: pitch, endFrequency: pitch * random.between(2.2...2.6), glide: 0.008, attack: 0.001, decay: 0.03, duration: 0.08, gain: 0.6, overtone: 0), at: 0),
+                Ring(at: 0.004, partials: [Partial(frequency: pitch * 2.1, decay: 0.04, gain: 0.25)]),
+                Wash(attack: 0.0005, decay: 0.01, frequency: 3500, resonance: 0.7, gain: 0.15),
             ],
-            level: -30
+            level: -24,
+            floor: 300
         )
     }
 
-    private static func shishi(_ random: inout SoundSynth.Random) -> SoundSynth.Design {
+    private static func bud(_ random: inout SoundSynth.Random) -> SoundSynth.Design {
+        let pitch = random.between(850...1050)
+        return SoundSynth.Design(
+            layers: [
+                Tone(voice: Voice(startFrequency: pitch, endFrequency: pitch * 1.4, glide: 0.01, attack: 0.001, decay: 0.02, duration: 0.06, gain: 0.4, overtone: 0.1), at: 0),
+                Wash(attack: 0.0005, decay: 0.006, frequency: 2500, resonance: 0.8, gain: 0.2),
+            ],
+            level: -28
+        )
+    }
+
+    private static func bloom(_ random: inout SoundSynth.Random) -> SoundSynth.Design {
+        let notes = [784.0, 880.0, 1046.5, 1174.7, 1318.5]
+        let first = Int.random(in: 0...2, using: &random)
+        var layers = pluck(at: 0, pitch: notes[first] * random.between(0.997...1.003), gain: 0.4, random: &random)
+        layers += pluck(at: random.between(0.07...0.09), pitch: notes[first + 2] * random.between(0.997...1.003), gain: 0.6, random: &random)
+        return SoundSynth.Design(layers: layers, level: -20)
+    }
+
+    private static func cuckoo(_ random: inout SoundSynth.Random) -> SoundSynth.Design {
+        let pitch = random.between(690...730)
+        return SoundSynth.Design(
+            layers: [
+                Tone(voice: Voice(startFrequency: pitch * 1.03, endFrequency: pitch, glide: 0.02, attack: 0.015, decay: 0.12, duration: 0.18, gain: 0.5, overtone: 0.12), at: 0),
+                Tone(voice: Voice(startFrequency: pitch * 0.84, endFrequency: pitch * 0.8, glide: 0.03, attack: 0.02, decay: 0.18, duration: 0.3, gain: 0.5, overtone: 0.12), at: 0.24),
+            ],
+            level: -22
+        )
+    }
+
+    private static func tweet(_ random: inout SoundSynth.Random) -> SoundSynth.Design {
+        let pitch = random.between(2600...3000)
+        return SoundSynth.Design(
+            layers: [
+                chirp(at: 0, pitch: pitch, gain: 0.5, random: &random),
+                chirp(at: random.between(0.1...0.12), pitch: pitch * 1.25, gain: 0.6, random: &random),
+            ],
+            level: -24
+        )
+    }
+
+    private static func morning(_ random: inout SoundSynth.Random) -> SoundSynth.Design {
+        var layers: [any SoundLayer] = [
+            Wash(attack: 0.25, decay: 0.25, frequency: 900, sweep: 1.8, resonance: 0.6, gain: 0.05),
+        ]
+        let pitch = random.between(3200...3600)
+        let steps = [1.0, 0.9, 1.12, 0.82]
+        var time = 0.05
+        for step in steps {
+            layers.append(chirp(at: time, pitch: pitch * step, gain: random.between(0.4...0.6), random: &random))
+            time += random.between(0.09...0.13)
+        }
+        layers += pluck(at: time + 0.05, pitch: 1046.5 * random.between(0.998...1.002), gain: 0.35, random: &random)
+        return SoundSynth.Design(layers: layers, level: -21)
+    }
+
+    private static func swish(_ random: inout SoundSynth.Random) -> SoundSynth.Design {
         SoundSynth.Design(
             layers: [
-                Wash(attack: 0.0001, decay: 0.001, frequency: 2500, resonance: 0.6, gain: 0.4),
-                Ring(partials: [
-                    Partial(frequency: 260 * random.between(0.98...1.02), decay: 0.09, gain: 1),
-                    Partial(frequency: 550 * random.between(0.98...1.02), decay: 0.06, gain: 0.6),
-                    Partial(frequency: 790 * random.between(0.98...1.02), decay: 0.04, gain: 0.4),
-                    Partial(frequency: 1800 * random.between(0.98...1.02), decay: 0.015, gain: 0.4),
-                    Partial(frequency: 3900 * random.between(0.98...1.02), decay: 0.008, gain: 0.25),
-                ]),
-                Grains(at: 0.12, rise: 0.02, fall: 0.08, density: 300, band: 2000...6000, cycles: 3...6, resonance: 3, grit: 2, gain: 0.25),
+                Wash(attack: 0.003, decay: 0.015, frequency: 4000, resonance: 0.6, gain: 0.1),
+                Grains(rise: 0.004, fall: 0.02, density: random.between(600...800), band: 2000...7000, cycles: 1...2, resonance: 0.8, grit: 1.8, gain: 0.6),
             ],
-            level: -20
+            level: -29
         )
-    }
-
-    private static func clappers(_ random: inout SoundSynth.Random) -> SoundSynth.Design {
-        var layers: [any SoundLayer] = []
-        for strike in [0.0, 0.12] {
-            layers.append(Wash(at: strike, attack: 0.0001, decay: 0.0006, frequency: 6000, resonance: 0.6, gain: 0.4))
-            layers.append(Ring(at: strike, partials: [
-                Partial(frequency: random.between(2000...2600), decay: random.between(0.03...0.06), gain: 1),
-                Partial(frequency: random.between(5000...5600), decay: 0.015, gain: 0.5),
-            ]))
-        }
-        return SoundSynth.Design(layers: layers, level: -19)
-    }
-
-    private static func suikinkutsu(_ random: inout SoundSynth.Random) -> SoundSynth.Design {
-        let layers: [any SoundLayer] = [
-            Tone(voice: Voice(startFrequency: 1600, endFrequency: 2600, glide: 0.006, attack: 0.001, decay: 0.012, duration: 0.03, gain: 0.5, overtone: 0.1), at: 0),
-            jar(at: 0.01, gain: 1, random: &random),
-            jar(at: 0.45, gain: 0.4, random: &random),
-            jar(at: 0.8, gain: 0.2, random: &random),
-        ]
-        return SoundSynth.Design(layers: layers, level: -22, floor: 400)
-    }
-
-    private static func jar(at time: Double, gain: Double, random: inout SoundSynth.Random) -> Ring {
-        let frequencies = [850.0, 1375.0, 1650.0, 1900.0, 2250.0, 2863.0]
-        let gains = [1.0, 0.7, 0.6, 0.5, 0.35, 0.25]
-        return Ring(at: time, partials: frequencies.indices.map { index in
-            Partial(
-                frequency: frequencies[index] * random.between(0.98...1.02),
-                decay: (1.8 - 0.8 * Double(index) / 5.0) * random.between(0.95...1.05),
-                gain: gains[index] * gain * random.between(0.9...1.1),
-                beat: index < 2 ? random.between(0.5...1.2) : 0.0
-            )
-        })
     }
 }

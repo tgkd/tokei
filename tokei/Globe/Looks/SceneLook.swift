@@ -53,6 +53,7 @@ struct MeshLook {
     let parameters: [UInt8]
     let snow: SnowSettings?
     let marks: MarkSettings?
+    let blooms: BloomSettings?
 
     init<Parameters>(
         fragment: String,
@@ -63,7 +64,8 @@ struct MeshLook {
         shape: ToyShape,
         parameters: Parameters,
         snow: SnowSettings? = nil,
-        marks: MarkSettings? = nil
+        marks: MarkSettings? = nil,
+        blooms: BloomSettings? = nil
     ) {
         self.fragment = fragment
         self.background = background
@@ -74,6 +76,7 @@ struct MeshLook {
         self.parameters = withUnsafeBytes(of: parameters) { Array($0) }
         self.snow = snow
         self.marks = marks
+        self.blooms = blooms
     }
 }
 
