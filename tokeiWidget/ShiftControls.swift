@@ -3,6 +3,8 @@ import SwiftUI
 import WidgetKit
 
 struct ShiftControls: View {
+    @Environment(\.widgetLook) private var look
+
     let shiftMinutes: Int
     var stepMinutes = 60
 
@@ -15,7 +17,7 @@ struct ShiftControls: View {
             Button(intent: ResetTimeIntent()) {
                 Text(ZoneClock.shiftLabel(minutes: shiftMinutes))
                     .monospacedDigit()
-                    .foregroundStyle(shiftMinutes == 0 ? Color.white.opacity(0.85) : Color.sunlight)
+                    .foregroundStyle(shiftMinutes == 0 ? Color(look.controlInk).opacity(0.85) : Color(look.controlAccent))
                     .padding(.horizontal, 6)
                     .frame(minWidth: 44, minHeight: 26)
             }
@@ -24,12 +26,9 @@ struct ShiftControls: View {
                     .frame(width: 30, height: 26)
             }
         }
-        .font(.system(size: 12, weight: .semibold))
-        .foregroundStyle(.white)
+        .font(look.typography.title.font(size: 12))
+        .foregroundStyle(look.controlInk)
         .buttonStyle(.plain)
-        .background(.black.opacity(0.5), in: .capsule)
-        .overlay {
-            Capsule().strokeBorder(.white.opacity(0.12), lineWidth: 0.5)
-        }
+        .widgetSurface(look.control, in: Capsule())
     }
 }

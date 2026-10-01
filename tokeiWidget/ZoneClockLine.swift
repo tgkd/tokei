@@ -2,6 +2,8 @@ import SwiftUI
 import WidgetKit
 
 struct ZoneClockLine: View {
+    @Environment(\.widgetLook) private var look
+
     let zone: Zone
     let date: Date
     let homeZone: TimeZone
@@ -12,19 +14,19 @@ struct ZoneClockLine: View {
         let delta = ZoneClock.dayDelta(of: zone.timeZone, from: homeZone, at: date)
         VStack(alignment: .leading, spacing: 0) {
             Text(zone.cityName)
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(.white.opacity(0.6))
+                .font(look.typography.title.font(size: 11))
+                .foregroundStyle(look.secondaryInk)
                 .lineLimit(1)
             HStack(alignment: .firstTextBaseline, spacing: 3) {
                 Text(ZoneClock.time(date, in: zone.timeZone))
-                    .font(.system(size: timeSize, weight: .semibold, design: .rounded))
+                    .font(look.typography.digits.font(size: timeSize))
                     .monospacedDigit()
-                    .foregroundStyle(isShifted ? Color.sunlight : Color.white)
+                    .foregroundStyle(isShifted ? look.accent : look.ink)
                     .widgetAccentable()
                 if delta != 0 {
                     Text(delta > 0 ? "+\(delta)" : "−\(abs(delta))")
-                        .font(.system(size: 10, weight: .bold, design: .rounded))
-                        .foregroundStyle(.white.opacity(0.5))
+                        .font(look.typography.title.font(size: 10))
+                        .foregroundStyle(look.faintInk)
                 }
             }
             .lineLimit(1)

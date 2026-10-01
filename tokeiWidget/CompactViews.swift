@@ -2,6 +2,8 @@ import SwiftUI
 import WidgetKit
 
 struct CompactSmallView: View {
+    @Environment(\.widgetLook) private var look
+
     let entry: ClockEntry
 
     var body: some View {
@@ -9,15 +11,18 @@ struct CompactSmallView: View {
             ForEach(entry.zones.prefix(4)) { zone in
                 HStack(alignment: .firstTextBaseline, spacing: 6) {
                     Text(zone.cityName)
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(.white.opacity(0.65))
+                        .font(look.typography.caption.font(size: 12))
+                        .foregroundStyle(look.secondaryInk)
                         .lineLimit(1)
+                        .minimumScaleFactor(0.85)
+                        .frame(minWidth: 44, alignment: .leading)
                     Spacer(minLength: 0)
                     Text(ZoneClock.time(entry.displayDate, in: zone.timeZone))
-                        .font(.system(size: 15, weight: .semibold, design: .rounded))
+                        .font(look.typography.digits.font(size: 15))
                         .monospacedDigit()
-                        .foregroundStyle(entry.isShifted ? Color.sunlight : Color.white)
-                        .fixedSize()
+                        .foregroundStyle(entry.isShifted ? look.accent : look.ink)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
                         .layoutPriority(1)
                         .widgetAccentable()
                 }
@@ -25,8 +30,8 @@ struct CompactSmallView: View {
             }
             if entry.isShifted {
                 Text(ZoneClock.shiftLabel(minutes: entry.shiftMinutes))
-                    .font(.system(size: 10, weight: .bold, design: .rounded))
-                    .foregroundStyle(.sunlight)
+                    .font(look.typography.title.font(size: 10))
+                    .foregroundStyle(look.accent)
             }
         }
     }
@@ -34,6 +39,7 @@ struct CompactSmallView: View {
 
 struct CompactMediumView: View {
     @Environment(\.widgetContentMargins) private var margins
+    @Environment(\.widgetLook) private var look
 
     let entry: ClockEntry
 
@@ -43,7 +49,7 @@ struct CompactMediumView: View {
                 ForEach(Array(entry.zones.prefix(4).enumerated()), id: \.element.id) { index, zone in
                     if index > 0 {
                         Rectangle()
-                            .fill(.white.opacity(0.08))
+                            .fill(look.rule)
                             .frame(width: 0.5)
                             .padding(.vertical, 10)
                     }
@@ -65,23 +71,24 @@ struct CompactMediumView: View {
         let daylight = zone.location.map { ZoneClock.daylight(at: $0, sun: sun) } ?? .day
         return VStack(spacing: 6) {
             Image(systemName: daylight.symbolName)
-                .symbolRenderingMode(.multicolor)
-                .font(.system(size: 14))
+                .symbolRenderingMode(daylight == .night ? .hierarchical : .multicolor)
+                .foregroundStyle(look.secondaryInk)
+                .font(.system(size: 14, weight: look.typography.symbolWeight.fontWeight))
             Text(zone.cityName)
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(.white.opacity(0.65))
+                .font(look.typography.title.font(size: 11))
+                .foregroundStyle(look.secondaryInk)
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
             Text(ZoneClock.time(date, in: zone.timeZone))
-                .font(.system(size: 20, weight: .semibold, design: .rounded))
+                .font(look.typography.digits.font(size: 20))
                 .monospacedDigit()
-                .foregroundStyle(entry.isShifted ? Color.sunlight : Color.white)
+                .foregroundStyle(entry.isShifted ? look.accent : look.ink)
                 .lineLimit(1)
                 .minimumScaleFactor(0.6)
                 .widgetAccentable()
             Text(ZoneClock.offsetLabel(minutes: offset))
-                .font(.system(size: 10, weight: .medium))
-                .foregroundStyle(.white.opacity(0.45))
+                .caption(look, size: 10)
+                .foregroundStyle(look.faintInk)
                 .lineLimit(1)
         }
         .padding(.horizontal, 4)

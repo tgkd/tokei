@@ -15,6 +15,7 @@ final class SceneModel {
     var style: SceneStyle {
         didSet {
             style.save()
+            publishWidgetLook()
             updateSound()
             if style != oldValue {
                 resetDisturbance()
@@ -80,6 +81,7 @@ final class SceneModel {
         style = SceneStyle.load()
         soundEnabled = UserDefaults.standard.object(forKey: Self.soundKey) as? Bool ?? true
         updateSound()
+        publishWidgetLook()
     }
 
     func prepareGlobe() async {
@@ -506,6 +508,12 @@ final class SceneModel {
         shiftGlide = nil
         ZoneStorage.saveShift(committedShift)
         WidgetCenter.shared.reloadAllTimelines()
+    }
+
+    private func publishWidgetLook() {
+        if ZoneStorage.saveWidgetLook(WidgetLook(style: style)) {
+            WidgetCenter.shared.reloadAllTimelines()
+        }
     }
 
     func syncShiftFromStorage() {

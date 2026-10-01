@@ -5,6 +5,7 @@ enum ZoneStorage {
     static let zonesKey = "saved_timezones"
     static let shiftKey = "time_offset_minutes"
     static let homeZoneKey = "home_timezone"
+    static let widgetLookKey = "widget_look"
 
     static var defaults: UserDefaults {
         UserDefaults(suiteName: suiteName) ?? .standard
@@ -48,5 +49,19 @@ enum ZoneStorage {
 
     static func loadHomeZone() -> TimeZone {
         homeZone(for: loadHomeZoneIdentifier())
+    }
+
+    static func loadWidgetLook() -> WidgetLook {
+        guard let data = defaults.data(forKey: widgetLookKey) else { return .standard }
+        guard let look = try? JSONDecoder().decode(WidgetLook.self, from: data) else { return .standard }
+        return look
+    }
+
+    static func saveWidgetLook(_ look: WidgetLook) -> Bool {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = .sortedKeys
+        guard let data = try? encoder.encode(look), data != defaults.data(forKey: widgetLookKey) else { return false }
+        defaults.set(data, forKey: widgetLookKey)
+        return true
     }
 }

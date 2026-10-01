@@ -6,18 +6,26 @@ struct ClockProvider: TimelineProvider {
     let includesMap: Bool
 
     func placeholder(in context: Context) -> ClockEntry {
-        makeEntry(at: Date(), zones: Zone.defaults, shift: 0, homeZone: .current, family: context.family)
+        makeEntry(at: Date(), zones: Zone.defaults, shift: 0, homeZone: .current, look: ZoneStorage.loadWidgetLook(), context: context)
     }
 
     func getSnapshot(in context: Context, completion: @escaping (ClockEntry) -> Void) {
         let homeZone = ZoneStorage.loadHomeZone()
-        completion(makeEntry(at: Date(), zones: loadZones(homeZone: homeZone), shift: ZoneStorage.loadShift(), homeZone: homeZone, family: context.family))
+        completion(makeEntry(
+            at: Date(),
+            zones: loadZones(homeZone: homeZone),
+            shift: ZoneStorage.loadShift(),
+            homeZone: homeZone,
+            look: ZoneStorage.loadWidgetLook(),
+            context: context
+        ))
     }
 
     func getTimeline(in context: Context, completion: @escaping (Timeline<ClockEntry>) -> Void) {
         let homeZone = ZoneStorage.loadHomeZone()
         let zones = loadZones(homeZone: homeZone)
         let shift = ZoneStorage.loadShift()
+        let look = ZoneStorage.loadWidgetLook()
         let now = Date().timeIntervalSince1970
         let start = Date(timeIntervalSince1970: (now / 60).rounded(.down) * 60)
         let entries = (0..<60).map { index in
@@ -26,19 +34,33 @@ struct ClockProvider: TimelineProvider {
                 zones: zones,
                 shift: shift,
                 homeZone: homeZone,
-                family: context.family
+                look: look,
+                context: context
             )
         }
         completion(Timeline(entries: entries, policy: .atEnd))
     }
 
-    private func makeEntry(at date: Date, zones: [Zone], shift: Int, homeZone: TimeZone, family: WidgetFamily) -> ClockEntry {
+    private func makeEntry(at date: Date, zones: [Zone], shift: Int, homeZone: TimeZone, look: WidgetLook, context: Context) -> ClockEntry {
         var mask: CGImage?
-        if includesMap && (family == .systemMedium || family == .systemLarge) {
+        var pixelMap: PixelMap?
+        if includesMap && (context.family == .systemMedium || context.family == .systemLarge) {
             let displayDate = date.addingTimeInterval(TimeInterval(shift * 60))
-            mask = MaskCache.shared.mask(for: displayDate, centerLongitude: ClockEntry.mapCenterLongitude(for: homeZone))
+            let center = ClockEntry.mapCenterLongitude(for: homeZone)
+            mask = MaskCache.shared.mask(for: displayDate, centerLongitude: center, grid: .smooth)
+            if case let .flat(ocean, land, coast, _, pixelSize?) = look.map {
+                pixelMap = PixelMap.make(
+                    at: displayDate,
+                    centerLongitude: center,
+                    width: context.displaySize.width,
+                    pixelSize: pixelSize,
+                    ocean: ocean,
+                    land: land,
+                    coast: coast
+                )
+            }
         }
-        return ClockEntry(date: date, zones: zones, shiftMinutes: shift, homeZone: homeZone, nightMask: mask)
+        return ClockEntry(date: date, zones: zones, shiftMinutes: shift, homeZone: homeZone, look: look, nightMask: mask, pixelMap: pixelMap)
     }
 
     private func loadZones(homeZone: TimeZone) -> [Zone] {
@@ -56,15 +78,16 @@ final class MaskCache: @unchecked Sendable {
     private struct Key: Hashable {
         let bucket: Int
         let centerLongitude: Double
+        let grid: NightMask.Grid
     }
 
-    func mask(for date: Date, centerLongitude: Double) -> CGImage? {
+    func mask(for date: Date, centerLongitude: Double, grid: NightMask.Grid) -> CGImage? {
         let bucket = Int((date.timeIntervalSince1970 / 300).rounded())
-        let key = Key(bucket: bucket, centerLongitude: centerLongitude)
+        let key = Key(bucket: bucket, centerLongitude: centerLongitude, grid: grid)
         if let image = lock.withLock({ images[key] }) {
             return image
         }
-        let image = NightMask.image(for: Date(timeIntervalSince1970: TimeInterval(bucket * 300)), centerLongitude: centerLongitude)
+        let image = NightMask.image(for: Date(timeIntervalSince1970: TimeInterval(bucket * 300)), centerLongitude: centerLongitude, grid: grid)
         lock.withLock {
             if images.count > 200 {
                 images.removeAll()

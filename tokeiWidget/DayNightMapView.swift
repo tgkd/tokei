@@ -2,6 +2,8 @@ import SwiftUI
 import WidgetKit
 
 struct DayNightMapView: View {
+    @Environment(\.widgetLook) private var look
+
     let entry: ClockEntry
     var labelInsets = EdgeInsets(top: 6, leading: 6, bottom: 6, trailing: 6)
     var reservedCorner: CGSize = .zero
@@ -13,19 +15,9 @@ struct DayNightMapView: View {
             let top = (proxy.size.height - mapSize.height) / 2
             let center = ClockEntry.mapCenterLongitude(for: entry.homeZone)
             ZStack(alignment: .topLeading) {
-                ZStack {
-                    RolledMapImage(name: "MapDay", centerLongitude: center, size: mapSize)
-                    if let mask = entry.nightMask {
-                        RolledMapImage(name: "MapNight", centerLongitude: center, size: mapSize)
-                            .mask {
-                                Image(decorative: mask, scale: 1)
-                                    .resizable()
-                                    .frame(width: mapSize.width, height: mapSize.height)
-                            }
-                    }
-                }
-                .frame(width: mapSize.width, height: mapSize.height)
-                .offset(y: top)
+                map(center: center, size: mapSize)
+                    .frame(width: mapSize.width, height: mapSize.height)
+                    .offset(y: top)
 
                 MapMarkers(
                     entry: entry,
@@ -46,6 +38,63 @@ struct DayNightMapView: View {
             .frame(width: proxy.size.width, height: proxy.size.height, alignment: .topLeading)
             .clipped()
         }
+    }
+
+    @ViewBuilder
+    private func map(center: Double, size: CGSize) -> some View {
+        switch look.map {
+        case .photo:
+            ZStack {
+                RolledMapImage(image: Image("MapDay"), centerLongitude: center, size: size)
+                if let mask = entry.nightMask {
+                    RolledMapImage(image: Image("MapNight"), centerLongitude: center, size: size)
+                        .mask {
+                            maskImage(mask, size: size, pixelated: false)
+                        }
+                }
+            }
+        case let .flat(ocean, land, coast, night, _):
+            if let pixelMap = entry.pixelMap {
+                ZStack {
+                    Image(decorative: pixelMap.surface, scale: 1)
+                        .resizable()
+                        .interpolation(.none)
+                        .frame(width: size.width, height: size.height)
+                    if let mask = pixelMap.night {
+                        Rectangle()
+                            .fill(night)
+                            .mask {
+                                maskImage(mask, size: size, pixelated: true)
+                            }
+                    }
+                }
+            } else {
+                ZStack {
+                    Rectangle()
+                        .fill(ocean)
+                    RolledMapImage(image: Image("MapLand").renderingMode(.template), centerLongitude: center, size: size)
+                        .foregroundStyle(land)
+                    if let coast {
+                        RolledMapImage(image: Image("MapCoast").renderingMode(.template), centerLongitude: center, size: size)
+                            .foregroundStyle(coast)
+                    }
+                    if let mask = entry.nightMask {
+                        Rectangle()
+                            .fill(night)
+                            .mask {
+                                maskImage(mask, size: size, pixelated: false)
+                            }
+                    }
+                }
+            }
+        }
+    }
+
+    private func maskImage(_ mask: CGImage, size: CGSize, pixelated: Bool) -> some View {
+        Image(decorative: mask, scale: 1)
+            .resizable()
+            .interpolation(pixelated ? .none : .medium)
+            .frame(width: size.width, height: size.height)
     }
 }
 

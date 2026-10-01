@@ -2,6 +2,8 @@ import SwiftUI
 import WidgetKit
 
 struct AccessoryRectangularView: View {
+    @Environment(\.widgetLook) private var look
+
     let entry: ClockEntry
 
     var body: some View {
@@ -9,13 +11,14 @@ struct AccessoryRectangularView: View {
             ForEach(entry.zones.prefix(3)) { zone in
                 HStack {
                     Text(zone.cityName)
+                        .font(look.typography.title.font(size: 13))
                         .lineLimit(1)
                     Spacer(minLength: 4)
                     Text(ZoneClock.time(entry.displayDate, in: zone.timeZone))
+                        .font(look.typography.digits.font(size: 13))
                         .monospacedDigit()
                         .widgetAccentable()
                 }
-                .font(.system(size: 13, weight: .semibold))
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -35,6 +38,8 @@ struct AccessoryInlineView: View {
 }
 
 struct AccessoryCircularView: View {
+    @Environment(\.widgetLook) private var look
+
     let entry: ClockEntry
 
     var body: some View {
@@ -43,12 +48,12 @@ struct AccessoryCircularView: View {
             AccessoryWidgetBackground()
             VStack(spacing: 0) {
                 Text(ZoneClock.time(entry.displayDate, in: zone.timeZone))
-                    .font(.system(size: 13, weight: .semibold, design: .rounded))
+                    .font(look.typography.digits.font(size: 13))
                     .monospacedDigit()
                     .minimumScaleFactor(0.6)
                     .widgetAccentable()
                 Text(String(zone.cityName.prefix(3)).uppercased())
-                    .font(.system(size: 9, weight: .bold))
+                    .font(look.typography.title.font(size: 9))
                     .foregroundStyle(.secondary)
             }
             .padding(4)

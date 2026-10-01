@@ -2,6 +2,8 @@ import SwiftUI
 import WidgetKit
 
 struct WorldClockLargeView: View {
+    @Environment(\.widgetLook) private var look
+
     let entry: ClockEntry
 
     var body: some View {
@@ -17,15 +19,16 @@ struct WorldClockLargeView: View {
                     }
                     if zone.id != entry.zones.prefix(4).last?.id {
                         Rectangle()
-                            .fill(.white.opacity(0.08))
+                            .fill(look.rule)
                             .frame(height: 0.5)
                     }
                 }
                 Spacer(minLength: 0)
                 HStack {
                     Text(ZoneClock.weekdayAndDate(entry.displayDate, in: entry.homeZone))
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(.white.opacity(0.5))
+                        .caption(look, size: 11)
+                        .textCase(look.typography.uppercasedCaptions ? .uppercase : nil)
+                        .foregroundStyle(look.faintInk)
                         .invalidatableContent()
                     Spacer()
                     ShiftControls(shiftMinutes: entry.shiftMinutes)
@@ -45,18 +48,18 @@ struct WorldClockLargeView: View {
         return HStack(alignment: .center) {
             VStack(alignment: .leading, spacing: 1) {
                 Text(zone.cityName)
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(.white)
+                    .font(look.typography.title.font(size: 14))
+                    .foregroundStyle(look.ink)
                 Text(detail)
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(.white.opacity(0.5))
+                    .caption(look, size: 11)
+                    .foregroundStyle(look.faintInk)
             }
             .lineLimit(1)
             Spacer(minLength: 8)
             Text(ZoneClock.time(date, in: zone.timeZone))
-                .font(.system(size: 22, weight: .semibold, design: .rounded))
+                .font(look.typography.digits.font(size: 22))
                 .monospacedDigit()
-                .foregroundStyle(entry.isShifted ? Color.sunlight : Color.white)
+                .foregroundStyle(entry.isShifted ? look.accent : look.ink)
                 .widgetAccentable()
         }
         .padding(.vertical, 6)

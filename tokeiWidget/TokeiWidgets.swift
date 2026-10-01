@@ -53,9 +53,7 @@ struct WorldClockEntryView: View {
 
     var body: some View {
         content
-            .containerBackground(for: .widget) {
-                Color.space
-            }
+            .themedContainer(entry.look)
     }
 
     @ViewBuilder
@@ -93,9 +91,7 @@ struct CompactEntryView: View {
                     .padding(margins)
             }
         }
-        .containerBackground(for: .widget) {
-            Color.space
-        }
+        .themedContainer(entry.look)
     }
 }
 
@@ -112,8 +108,6 @@ struct MinimalEntryView: View {
                 MinimalSmallView(entry: entry)
             }
         }
-        .containerBackground(for: .widget) {
-            Color.space
-        }
+        .themedContainer(entry.look)
     }
 }

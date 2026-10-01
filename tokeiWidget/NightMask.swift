@@ -2,13 +2,21 @@ import CoreGraphics
 import Foundation
 
 enum NightMask {
-    static let width = 256
-    static let height = 128
+    struct Grid: Hashable {
+        let columns: Int
+        let rows: Int
+        let dithered: Bool
+
+        static let smooth = Grid(columns: 256, rows: 128, dithered: false)
+    }
 
     private static let dayEdge = sin(0.5 * Double.pi / 180)
     private static let nightEdge = sin(-12 * Double.pi / 180)
+    private static let bayer: [Double] = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5]
 
-    static func image(for date: Date, centerLongitude: Double) -> CGImage? {
+    static func image(for date: Date, centerLongitude: Double, grid: Grid) -> CGImage? {
+        let width = grid.columns
+        let height = grid.rows
         let sun = SolarPosition(date: date)
         let sinDeclination = sin(sun.declination)
         let cosDeclination = cos(sun.declination)
@@ -26,7 +34,10 @@ enum NightMask {
             for column in 0..<width {
                 let altitude = a + b * columns[column]
                 let t = min(max((dayEdge - altitude) / (dayEdge - nightEdge), 0), 1)
-                let night = t * t * (3 - 2 * t)
+                var night = t * t * (3 - 2 * t)
+                if grid.dithered {
+                    night = night > (bayer[(row % 4) * 4 + column % 4] + 0.5) / 16 ? 1 : 0
+                }
                 pixels[(row * width + column) * 4 + 3] = UInt8((night * 255).rounded())
             }
         }
@@ -45,7 +56,7 @@ enum NightMask {
             bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedLast.rawValue),
             provider: provider,
             decode: nil,
-            shouldInterpolate: true,
+            shouldInterpolate: !grid.dithered,
             intent: .defaultIntent
         )
     }

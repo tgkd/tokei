@@ -2,6 +2,8 @@ import SwiftUI
 import WidgetKit
 
 struct MinimalZoneView: View {
+    @Environment(\.widgetLook) private var look
+
     let zone: Zone
     let entry: ClockEntry
     var timeSize: CGFloat = 40
@@ -10,19 +12,20 @@ struct MinimalZoneView: View {
         let date = entry.displayDate
         VStack(alignment: .leading, spacing: 2) {
             Text(zone.cityName)
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(.white.opacity(0.65))
+                .font(look.typography.title.font(size: 13))
+                .foregroundStyle(look.secondaryInk)
                 .lineLimit(1)
             Text(ZoneClock.time(date, in: zone.timeZone))
-                .font(.system(size: timeSize, weight: .medium, design: .rounded))
+                .font(look.typography.digits.font(size: timeSize))
                 .monospacedDigit()
-                .foregroundStyle(entry.isShifted ? Color.sunlight : Color.white)
+                .foregroundStyle(entry.isShifted ? look.accent : look.ink)
                 .lineLimit(1)
                 .minimumScaleFactor(0.5)
                 .widgetAccentable()
             Text(ZoneClock.weekdayAndDate(date, in: zone.timeZone))
-                .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(.white.opacity(0.45))
+                .caption(look, size: 12)
+                .textCase(look.typography.uppercasedCaptions ? .uppercase : nil)
+                .foregroundStyle(look.faintInk)
                 .lineLimit(1)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
@@ -30,6 +33,8 @@ struct MinimalZoneView: View {
 }
 
 struct MinimalSmallView: View {
+    @Environment(\.widgetLook) private var look
+
     let entry: ClockEntry
 
     var body: some View {
@@ -38,8 +43,8 @@ struct MinimalSmallView: View {
             .overlay(alignment: .topTrailing) {
                 if entry.isShifted {
                     Text(ZoneClock.shiftLabel(minutes: entry.shiftMinutes))
-                        .font(.system(size: 10, weight: .bold, design: .rounded))
-                        .foregroundStyle(.sunlight)
+                        .font(look.typography.title.font(size: 10))
+                        .foregroundStyle(look.accent)
                 }
             }
     }

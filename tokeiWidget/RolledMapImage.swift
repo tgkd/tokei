@@ -2,7 +2,7 @@ import SwiftUI
 import WidgetKit
 
 struct RolledMapImage: View {
-    let name: String
+    let image: Image
     let centerLongitude: Double
     let size: CGSize
 
@@ -10,7 +10,7 @@ struct RolledMapImage: View {
         let shift = -CGFloat(centerLongitude / 360) * size.width
         HStack(spacing: 0) {
             ForEach(0..<3, id: \.self) { _ in
-                Image(name)
+                image
                     .resizable()
                     .widgetAccentedRenderingMode(.desaturated)
                     .frame(width: size.width, height: size.height)

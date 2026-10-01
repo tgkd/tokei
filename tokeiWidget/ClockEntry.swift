@@ -7,7 +7,9 @@ struct ClockEntry: TimelineEntry {
     let zones: [Zone]
     let shiftMinutes: Int
     let homeZone: TimeZone
+    let look: WidgetLook
     let nightMask: CGImage?
+    let pixelMap: PixelMap?
 
     var displayDate: Date {
         date.addingTimeInterval(TimeInterval(shiftMinutes * 60))

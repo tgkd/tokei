@@ -2,6 +2,8 @@ import SwiftUI
 import WidgetKit
 
 struct WorldClockSmallView: View {
+    @Environment(\.widgetLook) private var look
+
     let entry: ClockEntry
 
     var body: some View {
@@ -14,9 +16,9 @@ struct WorldClockSmallView: View {
             Spacer(minLength: 0)
             if entry.isShifted {
                 Text(ZoneClock.shiftLabel(minutes: entry.shiftMinutes))
-                    .font(.system(size: 11, weight: .bold, design: .rounded))
+                    .font(look.typography.title.font(size: 11))
                     .monospacedDigit()
-                    .foregroundStyle(.sunlight)
+                    .foregroundStyle(look.accent)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
