@@ -11,6 +11,10 @@ enum SceneStyle: String, CaseIterable, Identifiable {
     case magma
     case abyss
     case pixel
+    case repeater
+    case garden
+    case mosaic
+    case knit
 
     private static let defaultsKey = "scene_style"
 
@@ -30,6 +34,10 @@ enum SceneStyle: String, CaseIterable, Identifiable {
         case .magma: .magma
         case .abyss: .abyss
         case .pixel: .pixel
+        case .repeater: .repeater
+        case .garden: .garden
+        case .mosaic: .mosaic
+        case .knit: .knit
         }
     }
 

@@ -10,6 +10,8 @@ struct EffectTuning {
         var squash: Double
         var pressSpring: Spring
         var releaseSpring: Spring
+        var followHaptic = false
+        var cutoff: Double? = nil
     }
 
     struct Pop {

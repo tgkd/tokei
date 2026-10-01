@@ -38,7 +38,8 @@ struct TimeTape: View {
             guard scene.isScrubbing || scene.shiftGlide != nil else { return }
             let boundary = Date(timeIntervalSince1970: Double(max(old, new)) * 3600)
             let local = Calendar.current.dateComponents(in: homeZone, from: boundary)
-            scene.emit(local.hour == 0 && local.minute == 0 ? .dayTick : .tick)
+            let kind: FeedbackCue.Kind = local.hour == 0 && local.minute == 0 ? .dayTick : .tick
+            scene.emit(kind, context: CueContext(direction: new > old ? 1 : -1, tension: min(Int(abs(shift) / (18 * 60)), 3)))
         }
         .accessibilityElement()
         .accessibilityLabel("Time shift")

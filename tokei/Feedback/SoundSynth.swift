@@ -4,6 +4,8 @@ struct SoundTimbre: Hashable, Sendable {
     let id: String
     let shape: @Sendable (FeedbackCue.Kind, SoundSynth.Voice) -> SoundSynth.Voice
     let design: (@Sendable (FeedbackCue.Kind, inout SoundSynth.Random) -> SoundSynth.Design?)?
+    let contextual: (@Sendable (FeedbackCue.Kind, CueContext, inout SoundSynth.Random) -> SoundSynth.Design?)?
+    let train: SoundTrain?
     let silent: Set<FeedbackCue.Kind>
     private let counts: [FeedbackCue.Kind: Int]
 
@@ -11,14 +13,18 @@ struct SoundTimbre: Hashable, Sendable {
         self.id = id
         self.shape = shape
         design = nil
+        contextual = nil
+        train = nil
         silent = []
         counts = [:]
     }
 
-    init(id: String, variants: [FeedbackCue.Kind: Int], silent: Set<FeedbackCue.Kind> = [], design: @escaping @Sendable (FeedbackCue.Kind, inout SoundSynth.Random) -> SoundSynth.Design?) {
+    init(id: String, variants: [FeedbackCue.Kind: Int], silent: Set<FeedbackCue.Kind> = [], design: @escaping @Sendable (FeedbackCue.Kind, inout SoundSynth.Random) -> SoundSynth.Design?, contextual: (@Sendable (FeedbackCue.Kind, CueContext, inout SoundSynth.Random) -> SoundSynth.Design?)? = nil, train: SoundTrain? = nil) {
         self.id = id
         shape = { _, voice in voice }
         self.design = design
+        self.contextual = contextual
+        self.train = train
         self.silent = silent
         counts = variants
     }
@@ -42,6 +48,31 @@ struct SoundTimbre: Hashable, Sendable {
         }
         return hash ^ (UInt64(kind) << 32) ^ UInt64(variant)
     }
+}
+
+struct SoundSequence: Sendable {
+    struct HapticTick: Sendable {
+        var intensity: Float
+        var sharpness: Float
+    }
+
+    struct Entry: Sendable {
+        var at: Double
+        var gain = 1.0
+        var design: (@Sendable (inout SoundSynth.Random) -> SoundSynth.Design)?
+        var haptic: HapticTick?
+    }
+
+    var entries: [Entry]
+    var seed: UInt64 = 0
+}
+
+struct SoundTrain: Sendable {
+    var spacing: Double
+    var limit: Int
+    var haptics: Int
+    var sharpness: Float
+    var design: @Sendable (Double, inout SoundSynth.Random) -> SoundSynth.Design
 }
 
 enum SoundSynth {
@@ -114,6 +145,15 @@ enum SoundSynth {
         return library
     }
 
+    static func contextualSamples(timbre: SoundTimbre, kind: FeedbackCue.Kind, context: CueContext, rate: Double, variants: Range<Int>? = nil) -> [[Float]] {
+        guard let index = FeedbackCue.Kind.allCases.firstIndex(of: kind) else { return [] }
+        return (variants ?? 0..<timbre.variants(of: kind)).compactMap { variant in
+            var random = Random(seed: timbre.seed(kind: index, variant: variant) ^ context.seed)
+            guard let design = timbre.contextual?(kind, context, &random) else { return nil }
+            return render(design, rate: rate, random: &random)
+        }
+    }
+
     static func voice(for kind: FeedbackCue.Kind, timbre: SoundTimbre) -> Voice {
         timbre.shape(kind, voice(for: kind))
     }
@@ -179,12 +219,34 @@ enum SoundSynth {
         }
     }
 
-    private static func limited(_ sample: Double) -> Double {
+    static func limited(_ sample: Double) -> Double {
         let knee = 0.45
         let magnitude = abs(sample)
         guard magnitude > knee else { return sample }
         let room = ceiling - knee
         return (knee + room * tanh((magnitude - knee) / room)) * (sample < 0 ? -1 : 1)
+    }
+
+    static func mix(_ sequence: SoundSequence, rate: Double) -> [Float] {
+        var mix = [Double]()
+        for (index, entry) in sequence.entries.enumerated() {
+            guard let design = entry.design else { continue }
+            var random = Random(seed: sequence.seed ^ UInt64(index))
+            let rendered = render(design(&random), rate: rate, random: &random)
+            let offset = Int(entry.at * rate)
+            let needed = offset + rendered.count
+            if needed > mix.count {
+                mix.append(contentsOf: repeatElement(0, count: needed - mix.count))
+            }
+            for (sampleIndex, sample) in rendered.enumerated() {
+                mix[offset + sampleIndex] += Double(sample) * entry.gain
+            }
+        }
+        guard !mix.isEmpty else { return [0] }
+        let fade = max(Int(0.004 * rate), 1)
+        return mix.indices.map { index in
+            Float(limited(mix[index]) * min(Double(mix.count - index) / Double(fade), 1))
+        }
     }
 
     static func loudness(_ samples: [Double], rate: Double) -> Double {

@@ -37,6 +37,7 @@ final class GlobeRenderer {
     private(set) var textures: GlobeTextures?
     private(set) var toyMesh: ToyMesh?
     let snowCover: SnowCover?
+    let markMap: MarkMap?
     private let cloudShell: CloudShell?
     private var weatherTexture: (frame: WeatherFrame, texture: MTLTexture)?
     private var meshTargets: (color: MTLTexture, depth: MTLTexture)?
@@ -185,6 +186,7 @@ final class GlobeRenderer {
         self.device = device
         self.queue = queue
         snowCover = SnowCover(device: device)
+        markMap = MarkMap(device: device)
         cloudShell = CloudShell(device: device)
         self.pipeline = pipeline
         self.effectsPipeline = effectsPipeline
@@ -403,6 +405,8 @@ final class GlobeRenderer {
             encoder.setFragmentTexture(mesh.relief, index: 3)
             encoder.setFragmentTexture(snowCover?.texture ?? placeholder, index: 4)
             encoder.setFragmentTexture(weatherTexture(for: frame.weather), index: 5)
+            encoder.setFragmentTexture(markMap?.texture ?? placeholder, index: 6)
+            encoder.setFragmentTexture(markMap?.fadeTexture ?? placeholder, index: 7)
             encoder.setFragmentSamplerState(surfaceSampler, index: 0)
             for (slot, var nodes) in shape.surface.nodes(in: frame).enumerated() where !nodes.isEmpty {
                 var terrain = mesh.uniforms(for: shape, grid: ToySurface.grids[slot])

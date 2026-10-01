@@ -31,6 +31,10 @@ extension SceneStyle {
         case .magma: .magma
         case .abyss: .abyss
         case .pixel: .pixel
+        case .repeater: .repeater
+        case .garden: .garden
+        case .mosaic: .mosaic
+        case .knit: .knit
         }
     }
 }

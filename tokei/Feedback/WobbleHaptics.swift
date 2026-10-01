@@ -62,4 +62,25 @@ final class WobbleHaptics {
         try? engine.start()
         try? player.start(atTime: CHHapticTimeImmediate)
     }
+
+    func play(_ ticks: [SoundSequence.HapticTick], delays: [Double]) -> (any CHHapticPatternPlayer)? {
+        guard let engine, !ticks.isEmpty else { return nil }
+        let events = zip(ticks, delays).map { tick, delay in
+            CHHapticEvent(
+                eventType: .hapticTransient,
+                parameters: [
+                    CHHapticEventParameter(parameterID: .hapticIntensity, value: tick.intensity),
+                    CHHapticEventParameter(parameterID: .hapticSharpness, value: tick.sharpness),
+                ],
+                relativeTime: delay
+            )
+        }
+        guard
+            let pattern = try? CHHapticPattern(events: events, parameters: []),
+            let player = try? engine.makePlayer(with: pattern)
+        else { return nil }
+        try? engine.start()
+        try? player.start(atTime: CHHapticTimeImmediate)
+        return player
+    }
 }

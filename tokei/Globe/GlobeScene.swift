@@ -34,7 +34,8 @@ struct GlobeScene: View {
                     style: scene.style,
                     effects: scene.effects.snapshot(at: context.date, tuning: scene.style.effects),
                     weather: scene.style.hasClouds ? weather.frame : nil,
-                    petals: scene.style.mesh?.petals == nil ? [] : scene.effects.petalFlights(at: context.date, tuning: scene.style.effects)
+                    petals: scene.style.mesh?.petals == nil ? [] : scene.effects.petalFlights(at: context.date, tuning: scene.style.effects),
+                    marks: scene.marksRevision
                 )
                 let clouds = CloudPresence(frame: frame, snow: scene.renderer?.snowCover)
                 let items = MarkerLayout.items(
@@ -63,7 +64,10 @@ struct GlobeScene: View {
                             .allowsHitTesting(false)
                             .transition(.opacity)
                     }
-                    MarkerOverlay(items: items, selection: store.selection, isShifted: isShifted) { id in
+                    MarkerOverlay(items: items, selection: store.selection, isShifted: isShifted, striking: scene.striking, onStrike: { item in
+                        let components = Calendar(identifier: .gregorian).dateComponents(in: item.zone.timeZone, from: date)
+                        scene.strike(hour: components.hour ?? 0, minute: components.minute ?? 0, zone: item.zone)
+                    }) { id in
                         store.toggleSelection(id)
                     }
                     .opacity(scene.isGlobeReady ? 1 : 0)
@@ -105,9 +109,23 @@ struct GlobeScene: View {
             scene.focus(on: request.point)
         }
         .onChange(of: store.selection) { _, selection in
-            guard let selection, let location = store.zones.first(where: { $0.id == selection })?.location else { return }
-            scene.pop(at: location.unitVector)
+            guard let selection, let zone = store.zones.first(where: { $0.id == selection }), let location = zone.location else { return }
+            scene.pop(at: location.unitVector, context: popContext(for: zone))
         }
+        .task(id: popPrewarm) {
+            scene.prewarmPops(store.zones.map(popContext(for:)))
+        }
+    }
+
+    private var popPrewarm: [String] {
+        [scene.style.rawValue, String(scene.soundEnabled), store.homeZone.identifier] + store.zones.map(\.timeZoneIdentifier)
+    }
+
+    private func popContext(for zone: Zone) -> CueContext {
+        let offset = ZoneClock.offsetMinutes(of: zone.timeZone, from: store.homeZone, at: date)
+        let hours = Int((Double(offset) / 60).rounded())
+        let folded = ((hours % 24) + 24) % 24
+        return CueContext(pitch: folded >= 12 ? folded - 24 : folded)
     }
 
     private func rotation(frame: GlobeFrame) -> some Gesture {

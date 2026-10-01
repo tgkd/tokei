@@ -10,6 +10,7 @@ struct GlobeFrame: Equatable {
     var effects = EffectSnapshot.none
     var weather: WeatherFrame?
     var petals: [PetalFlight] = []
+    var marks = 0
 
     static func focalLength(for size: CGSize) -> Double {
         Double(min(size.width, size.height)) * 1.6

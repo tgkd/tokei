@@ -73,11 +73,19 @@ struct ThemeSwatch: View {
             AbyssSwatch.finish(in: context, rect: rect, unit: unit, look: look)
         case .pixel:
             PixelSwatch.finish(in: context, rect: rect, unit: unit, look: look)
+        case .enamel:
+            RepeaterSwatch.finish(in: context, rect: rect, unit: unit, look: look)
+        case .yarn:
+            KnitSwatch.finish(in: context, rect: rect, unit: unit, look: look)
         case .chrome:
             context.fill(Path(CGRect(x: rect.minX, y: rect.minY, width: rect.width, height: 52 * unit)), with: .color(.white.opacity(0.14)))
             context.fill(Path(CGRect(x: rect.minX, y: rect.minY + 56 * unit, width: rect.width, height: 44 * unit)), with: .color(.black.opacity(0.3)))
             context.fill(Path(CGRect(x: rect.minX, y: rect.minY + 53 * unit, width: rect.width, height: 2 * unit)), with: .color(.white.opacity(0.3)))
             context.fill(Path(ellipseIn: CGRect(x: rect.minX + 22 * unit, y: rect.minY + 14 * unit, width: 16 * unit, height: 10 * unit)), with: .color(.white.opacity(0.9)))
+        case .raked:
+            GardenSwatch.finish(in: context, rect: rect, unit: unit, look: look)
+        case .tiles:
+            MosaicSwatch.finish(in: context, rect: rect, unit: unit, look: look)
         }
     }
 
@@ -103,6 +111,14 @@ struct ThemeSwatch: View {
             AbyssSwatch.rim(in: context, rect: rect, unit: unit, look: look)
         case .pixel:
             PixelSwatch.rim(in: context, rect: rect, unit: unit, look: look)
+        case .enamel:
+            RepeaterSwatch.rim(in: context, rect: rect, unit: unit, look: look)
+        case .raked:
+            GardenSwatch.rim(in: context, rect: rect, unit: unit, look: look)
+        case .tiles:
+            MosaicSwatch.rim(in: context, rect: rect, unit: unit, look: look)
+        case .yarn:
+            KnitSwatch.rim(in: context, rect: rect, unit: unit, look: look)
         }
     }
 

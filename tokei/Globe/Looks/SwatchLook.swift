@@ -12,6 +12,10 @@ struct SwatchLook: Equatable {
         case ember
         case glow
         case pixel
+        case enamel
+        case raked
+        case tiles
+        case yarn
     }
 
     var ocean: Color

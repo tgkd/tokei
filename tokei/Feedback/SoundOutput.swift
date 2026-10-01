@@ -33,6 +33,13 @@ final class SoundOutput: @unchecked Sendable {
         }
     }
 
+    func stop(voice slot: Int) {
+        queue.async {
+            guard slot < self.voices.count else { return }
+            self.voices[slot].stop()
+        }
+    }
+
     func stop() {
         queue.async {
             self.voices.forEach { $0.stop() }

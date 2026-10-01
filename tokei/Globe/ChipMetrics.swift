@@ -27,6 +27,10 @@ enum ChipMetrics {
     private static let magmaFonts = Fonts(SceneStyle.magma.interface.chip)
     private static let abyssFonts = Fonts(SceneStyle.abyss.interface.chip)
     private static let pixelFonts = Fonts(SceneStyle.pixel.interface.chip)
+    private static let repeaterFonts = Fonts(SceneStyle.repeater.interface.chip)
+    private static let gardenFonts = Fonts(SceneStyle.garden.interface.chip)
+    private static let mosaicFonts = Fonts(SceneStyle.mosaic.interface.chip)
+    private static let knitFonts = Fonts(SceneStyle.knit.interface.chip)
 
     static func fonts(for style: SceneStyle) -> Fonts {
         switch style {
@@ -40,6 +44,10 @@ enum ChipMetrics {
         case .magma: magmaFonts
         case .abyss: abyssFonts
         case .pixel: pixelFonts
+        case .repeater: repeaterFonts
+        case .garden: gardenFonts
+        case .mosaic: mosaicFonts
+        case .knit: knitFonts
         }
     }
 

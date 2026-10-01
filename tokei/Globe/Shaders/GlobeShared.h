@@ -262,6 +262,18 @@ static inline float snowLevelBilinear(texture2d<float> snowTexture, sampler snow
     return mix(mix(levels.w, levels.z, t.x), mix(levels.x, levels.y, t.x), t.y);
 }
 
+struct MarkTap {
+    float coverage;
+    float phase;
+};
+
+static inline MarkTap markTap(texture2d<float> markTexture, sampler markSampler, float2 uv, gradient2d gradient) {
+    float4 sample = markTexture.sample(markSampler, uv, gradient);
+    float coverage = sample.r;
+    float phase = sample.g / max(sample.r, 1e-4);
+    return {coverage, phase};
+}
+
 static inline Cellular cellular(float2 point, float seed) {
     float2 base = floor(point);
     float2 local = point - base;

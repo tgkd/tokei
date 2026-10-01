@@ -26,4 +26,5 @@ struct ChipLook: Equatable {
     var detailColor: Color
     var shiftedTimeColor: Color?
     var selectedInk: Color?
+    var flipsOnSelect = false
 }

@@ -10,6 +10,8 @@ struct SceneLook {
     let sound: SoundTimbre?
     let mesh: MeshLook?
     var petalDrift: PetalDriftLook?
+    var popEcho: SoundSequence? = nil
+    var strikes: StrikeSchedule? = nil
 
     var backdropColor: Color {
         Color(.sRGBLinear, red: Double(backdrop.x), green: Double(backdrop.y), blue: Double(backdrop.z))
@@ -36,6 +38,11 @@ struct PetalDriftLook {
     let lifetime: Float
 }
 
+struct StrikeSchedule: Sendable {
+    let sequence: @Sendable (_ hour: Int, _ minute: Int) -> SoundSequence
+    let duration: @Sendable (_ hour: Int, _ minute: Int) -> Double
+}
+
 struct MeshLook {
     let fragment: String
     let background: String?
@@ -45,6 +52,7 @@ struct MeshLook {
     let shape: ToyShape
     let parameters: [UInt8]
     let snow: SnowSettings?
+    let marks: MarkSettings?
 
     init<Parameters>(
         fragment: String,
@@ -54,7 +62,8 @@ struct MeshLook {
         pixelSize: Double? = nil,
         shape: ToyShape,
         parameters: Parameters,
-        snow: SnowSettings? = nil
+        snow: SnowSettings? = nil,
+        marks: MarkSettings? = nil
     ) {
         self.fragment = fragment
         self.background = background
@@ -64,6 +73,7 @@ struct MeshLook {
         self.shape = shape
         self.parameters = withUnsafeBytes(of: parameters) { Array($0) }
         self.snow = snow
+        self.marks = marks
     }
 }
 

@@ -35,6 +35,12 @@ final class SceneModel {
             updateSound()
             if !isForeground {
                 effects.petals = []
+                cancelSequence()
+                feedback.cancel(trainTicket)
+                trainTicket = nil
+                markStroke = nil
+                renderer?.markMap?.reset()
+                marksRevision = renderer?.markMap?.revision ?? marksRevision
             }
         }
     }
@@ -48,11 +54,19 @@ final class SceneModel {
     var effects = SceneEffects()
     @ObservationIgnored private var pressFootprint = FootprintShape.random(radius: 0.08)
     @ObservationIgnored private var pressPoint: SIMD3<Double>?
+    @ObservationIgnored private var pressStart: Date?
+    @ObservationIgnored private var pressTicket: SoundBoard.SoundTicket?
     @ObservationIgnored private var stroke: SurfaceStroke?
     @ObservationIgnored private var petalTrail: SIMD3<Double>?
+    @ObservationIgnored private var trainTicket: FeedbackTicket?
+    @ObservationIgnored private var sequenceTicket: FeedbackTicket?
+    @ObservationIgnored private var strikeTask: Task<Void, Never>?
     private(set) var cue: FeedbackCue?
     private(set) var isGlobeReady = false
     private(set) var hasPlacedCamera = false
+    private(set) var marksRevision = 0
+    var striking: UUID?
+    @ObservationIgnored private var markStroke: MarkStroke?
     let renderer = GlobeRenderer()
     @ObservationIgnored private let feedback = FeedbackPlayer()
 
@@ -75,19 +89,52 @@ final class SceneModel {
         }
     }
 
-    func emit(_ kind: FeedbackCue.Kind) {
-        let cue = FeedbackCue(kind: kind, style: style)
+    @discardableResult
+    func emit(_ kind: FeedbackCue.Kind, context: CueContext = .none) -> SoundBoard.SoundTicket? {
+        let cue = FeedbackCue(kind: kind, style: style, context: context)
         self.cue = cue
-        feedback.play(cue, style: style, soundEnabled: soundEnabled)
+        return feedback.play(cue, style: style, soundEnabled: soundEnabled)
+    }
+
+    private func playSequence(_ sequence: SoundSequence) {
+        cancelSequence()
+        sequenceTicket = feedback.play(sequence, style: style, soundEnabled: soundEnabled)
+    }
+
+    private func cancelSequence() {
+        feedback.cancel(sequenceTicket)
+        sequenceTicket = nil
+        striking = nil
+        strikeTask?.cancel()
+        strikeTask = nil
+    }
+
+    func strike(hour: Int, minute: Int, zone: Zone) {
+        guard let schedule = style.look.strikes else { return }
+        playSequence(schedule.sequence(hour, minute))
+        striking = zone.id
+        let duration = schedule.duration(hour, minute)
+        strikeTask = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(duration + 0.4))
+            guard !Task.isCancelled else { return }
+            self?.striking = nil
+        }
+    }
+
+    private func surface(at point: SIMD3<Double>) -> CueContext.Surface? {
+        guard let mesh = style.mesh, let coast = renderer?.toyMesh?.shapes[mesh.shape]?.surface.coast else { return nil }
+        return coast.sample(point) > 0 ? .land : .sea
     }
 
     var allowsSurfaceDrag: Bool {
         guard let mesh = style.mesh else { return false }
-        return mesh.snow != nil || !reduceMotion
+        return mesh.snow != nil || mesh.marks != nil || !reduceMotion
     }
 
     func press(at point: SIMD3<Double>, footprint: Double) {
-        emit(.press)
+        cancelSequence()
+        pressStart = Date()
+        pressTicket = emit(.press, context: CueContext(surface: surface(at: point)))
         pressPoint = point
         pressFootprint = FootprintShape.random(radius: footprint)
         stampSnow(at: point, shape: pressFootprint)
@@ -96,6 +143,7 @@ final class SceneModel {
     }
 
     func releasePress(moved: Bool) {
+        cutPressIfReleasedEarly()
         guard var press = effects.press, press.release == nil else { return }
         let now = Date()
         press.release = now
@@ -106,9 +154,29 @@ final class SceneModel {
         }
     }
 
-    func pop(at point: SIMD3<Double>) {
-        emit(.pop)
+    private func cutPressIfReleasedEarly() {
+        if let cutoff = style.effects.press.cutoff, let pressStart, Date().timeIntervalSince(pressStart) < cutoff {
+            feedback.cancel(pressTicket)
+        }
+        pressStart = nil
+        pressTicket = nil
+    }
+
+    func prewarmPops(_ contexts: [CueContext]) {
+        feedback.prewarm(.pop, contexts: contexts, style: style, soundEnabled: soundEnabled)
+    }
+
+    func pop(at point: SIMD3<Double>, context: CueContext = .none) {
+        cancelSequence()
+        emit(.pop, context: context)
+        if let popEcho = style.look.popEcho {
+            playSequence(popEcho)
+        }
         stampSnow(at: point, shape: FootprintShape.random(radius: 0.035))
+        if let marks = style.mesh?.marks, let stamp = marks.pop, let markMap = renderer?.markMap {
+            markMap.stamp(stamp, at: point, peak: markPeak(marks, now: Date()))
+            marksRevision = markMap.revision
+        }
         guard !reduceMotion else { return }
         effects.pop = SceneEffects.Pop(point: point, start: Date())
         if let petals = style.effects.petals {
@@ -117,6 +185,7 @@ final class SceneModel {
     }
 
     func beginSurfaceDrag(at point: SIMD3<Double>?, footprint: Double, location: CGPoint) {
+        cancelSequence()
         interruptCamera()
         emit(.carve)
         let now = Date()
@@ -132,6 +201,9 @@ final class SceneModel {
         }
         self.stroke = stroke
         petalTrail = nil
+        if let marks = style.mesh?.marks {
+            markStroke = MarkStroke(halfWidth: footprint * marks.width)
+        }
         dragSurface(to: point, location: location)
     }
 
@@ -145,6 +217,11 @@ final class SceneModel {
                 snowCover.carve(from: stroke.trail.last ?? point, to: point, trail: stroke.trail, recovery: snow.recovery, hold: hold, now: now)
                 extendSnow(from: snowCover, until: now.addingTimeInterval(snow.recovery + hold))
             }
+            if let marks = style.mesh?.marks, let markMap = renderer?.markMap, var mark = markStroke {
+                markMap.sweep(to: point, stroke: &mark, brush: marks.drag, peak: markPeak(marks, now: now))
+                markStroke = mark
+                marksRevision = markMap.revision
+            }
             stroke.trail.advance(to: point)
             if var press = effects.press, press.release == nil {
                 press.pull(to: point, at: now, spring: tuning.follow)
@@ -153,6 +230,7 @@ final class SceneModel {
             brushPetals(at: point)
         } else {
             stroke.trail.last = nil
+            markStroke?.last = nil
         }
         if let strength = stroke.advance(to: location, at: now, onSurface: point != nil, spacing: tuning.grainSpacing) {
             feedback.grain(.carve, style: style, soundEnabled: soundEnabled, strength: strength)
@@ -163,6 +241,8 @@ final class SceneModel {
     func endSurfaceDrag() {
         guard stroke != nil else { return }
         stroke = nil
+        cutPressIfReleasedEarly()
+        markStroke = nil
         guard var press = effects.press, press.release == nil else { return }
         press.release = Date()
         effects.press = press
@@ -236,6 +316,9 @@ final class SceneModel {
         effects.snow = nil
         effects.petals = []
         renderer?.snowCover?.reset()
+        markStroke = nil
+        renderer?.markMap?.reset()
+        marksRevision = renderer?.markMap?.revision ?? marksRevision
     }
 
     func settleEffects() {
@@ -243,7 +326,21 @@ final class SceneModel {
         effects = effects.settled(at: Date(), tuning: style.effects)
         if hadSnow && effects.snow == nil {
             renderer?.snowCover?.reset()
+            if style.mesh?.marks?.recovery != nil, let markMap = renderer?.markMap {
+                markStroke?.last = nil
+                markMap.reset()
+                marksRevision = markMap.revision
+            }
         }
+    }
+
+    private func markPeak(_ marks: MarkSettings, now: Date) -> Double? {
+        guard let recovery = marks.recovery, let snowCover = renderer?.snowCover else { return nil }
+        if effects.snow == nil {
+            snowCover.reset()
+        }
+        extendSnow(from: snowCover, until: now.addingTimeInterval(marks.hold + recovery))
+        return now.timeIntervalSince(snowCover.epoch) + marks.hold
     }
 
     func focus(on point: GeoPoint) {
@@ -286,12 +383,17 @@ final class SceneModel {
     }
 
     func interruptCamera() {
+        feedback.cancel(trainTicket)
+        trainTicket = nil
+        cancelSequence()
         guard let cameraMotion else { return }
         camera = cameraMotion.camera(at: Date())
         self.cameraMotion = nil
     }
 
     func fly(to target: OrbitCamera, duration: Double = 1.0, arc: Double = 0) {
+        feedback.cancel(trainTicket)
+        trainTicket = nil
         let now = Date()
         let from = camera(at: now)
         camera = from
@@ -300,8 +402,12 @@ final class SceneModel {
 
     func coast(yawVelocity: Double, pitchVelocity: Double) {
         let motion = CameraMotion.inertia(start: Date(), from: camera, yawVelocity: yawVelocity, pitchVelocity: pitchVelocity)
-        if motion.endDate.timeIntervalSinceNow > 0.05 {
-            cameraMotion = motion
+        guard motion.endDate.timeIntervalSinceNow > 0.05 else { return }
+        cameraMotion = motion
+        feedback.cancel(trainTicket)
+        trainTicket = nil
+        if let train = style.soundTimbre?.train {
+            trainTicket = feedback.train(train, speed: hypot(yawVelocity, pitchVelocity), style: style, soundEnabled: soundEnabled)
         }
     }
 

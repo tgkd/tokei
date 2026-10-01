@@ -4,6 +4,8 @@ struct MarkerOverlay: View {
     let items: [MarkerItem]
     let selection: UUID?
     let isShifted: Bool
+    let striking: UUID?
+    let onStrike: (MarkerItem) -> Void
     let onSelect: (UUID) -> Void
 
     var body: some View {
@@ -23,13 +25,19 @@ struct MarkerOverlay: View {
                             detail: item.detail,
                             weather: item.weather,
                             isSelected: item.id == selection,
-                            isShifted: isShifted
+                            isShifted: isShifted,
+                            isStriking: item.id == striking
                         )
                     }
                     .buttonStyle(.plain)
                     .frame(width: chipFrame.width, height: chipFrame.height)
                     .position(x: chipFrame.midX, y: chipFrame.midY)
                     .opacity(item.fade)
+                    .highPriorityGesture(
+                        LongPressGesture(minimumDuration: 0.6).onEnded { _ in
+                            onStrike(item)
+                        }
+                    )
                 }
             }
         }
