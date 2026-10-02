@@ -22,6 +22,11 @@ struct GardenLook {
     float4 shore;
     float4 bladeDeep;
     float4 bladeTip;
+    float4 bladeCool;
+    float4 bladeStraw;
+    float4 clover;
+    float4 cloverMark;
+    float4 cloverBloom;
     float4 leaf;
     float4 white;
     float4 butter;
@@ -31,6 +36,10 @@ struct GardenLook {
     float4 sky;
     float4 coral;
     float4 magenta;
+    float4 plum;
+    float4 cornflower;
+    float4 indigo;
+    float4 lavender;
     float4 eye;
     float4 eyeDark;
     float4 moon;
@@ -57,12 +66,18 @@ struct GardenLook {
     float groveLevel;
     float grassCell;
     float grassChance;
+    float grassLean;
+    float grassCurl;
+    float patchCell;
+    float cloverChance;
+    float meadowChance;
     float clusterCell;
     float clusterChance;
     float bouquetCell;
     float bouquetChance;
     float bouquetSize;
     float bouquetDelay;
+    float climateBias;
     float coastMargin;
     float grow;
     float hold;
@@ -78,8 +93,16 @@ struct GardenLook {
     float dappleCells;
     float dappleStrength;
     float grain;
-    float reserved1;
-    float reserved2;
+};
+
+enum class GardenSpecies : int {
+    spike,
+    poppy,
+    primrose,
+    daisy,
+    tulip,
+    cornflower,
+    starlet
 };
 
 struct GardenCell {
@@ -89,14 +112,33 @@ struct GardenCell {
     float3 shape;
 };
 
-struct GardenBloom {
-    float count;
-    float inner;
-    float reach;
-    float breadth;
-    float eye;
-    float3 petal;
-    float3 center;
+struct GardenPetal {
+    float edge;
+    float along;
+    float seam;
+    float angle;
+    float2 local;
+};
+
+struct GardenHabit {
+    float leaves;
+    float leafReach;
+    float leafBreadth;
+    float leafSage;
+    float height;
+    float spread;
+};
+
+struct GardenGrass {
+    float blades;
+    float height;
+    float width;
+    float curl;
+    float seeds;
+    float flowers;
+    float2 lean;
+    float3 deep;
+    float3 tip;
 };
 
 static float gardenNoise(float3 p) {
@@ -259,97 +301,373 @@ static float2 gardenTurn(float2 p, float angle) {
     return float2(dot(p, axis), dot(p, float2(-axis.y, axis.x)));
 }
 
-static float gardenPetals(float2 p, float count, float inner, float reach, float breadth) {
+static GardenPetal gardenPetal(float2 p, float count, float inner, float reach, float breadth) {
     float sector = 2.0 * M_PI_F / count;
     float angle = atan2(p.y, p.x);
     float a = angle - sector * round(angle / sector);
     float r = length(p);
     float semi = max(0.5 * reach, 1e-3);
     float width = max(0.5 * breadth, 1e-3);
-    float2 q = float2((r * cos(a) - inner - semi) / semi, r * sin(a) / width);
-    return (length(q) - 1.0) * min(semi, width);
+    GardenPetal petal;
+    petal.angle = angle;
+    petal.local = float2(r * cos(a), r * sin(a));
+    float2 q = float2((petal.local.x - inner - semi) / semi, petal.local.y / width);
+    petal.edge = (length(q) - 1.0) * min(semi, width);
+    petal.along = saturate(r / max(inner + reach, 1e-3));
+    petal.seam = abs(a) / (0.5 * sector);
+    return petal;
 }
 
-static float3 gardenHue(float family, float pick, constant GardenLook &look) {
-    if (family < 0.25) {
-        return pick < 0.4 ? look.poppy.xyz : (pick < 0.7 ? look.coral.xyz : look.butter.xyz);
-    }
-    if (family < 0.5) {
-        return pick < 0.4 ? look.violet.xyz : (pick < 0.75 ? look.sky.xyz : look.white.xyz);
-    }
-    if (family < 0.75) {
-        return pick < 0.45 ? look.rose.xyz : (pick < 0.75 ? look.magenta.xyz : look.white.xyz);
-    }
-    return pick < 0.35 ? look.white.xyz : (pick < 0.65 ? look.butter.xyz : (pick < 0.85 ? look.sky.xyz : look.rose.xyz));
+static float gardenStar(float2 p, float depth) {
+    float sector = 2.0 * M_PI_F / 5.0;
+    float angle = atan2(p.y, p.x);
+    float a = abs(angle - sector * round(angle / sector));
+    float2 offset = length(p) * float2(cos(a), sin(a)) - float2(1.0, 0.0);
+    float2 side = depth * float2(cos(0.5 * sector), sin(0.5 * sector)) - float2(1.0, 0.0);
+    float along = saturate(dot(offset, side) / dot(side, side));
+    float inside = side.x * offset.y - side.y * offset.x;
+    return length(offset - side * along) * (inside > 0.0 ? -1.0 : 1.0);
 }
 
-static GardenBloom gardenBloom(float kind, float3 petal, float3 eye, constant GardenLook &look) {
-    if (kind < 0.3) {
-        return GardenBloom{12.0, 0.16, 0.84, 0.26, 0.3, petal, eye};
-    }
-    if (kind < 0.6) {
-        return GardenBloom{5.0, 0.0, 1.0, 0.8, 0.22, petal, eye};
-    }
-    if (kind < 0.8) {
-        return GardenBloom{4.0, 0.0, 1.0, 1.1, 0.2, petal, look.eyeDark.xyz};
-    }
-    return GardenBloom{6.0, 0.08, 0.92, 0.42, 0.18, petal, eye};
+static float gardenTrefoil(float2 p, float size, thread float &seam) {
+    float sector = 2.0 * M_PI_F / 3.0;
+    float angle = atan2(p.y, p.x);
+    float a = angle - sector * round(angle / sector);
+    float r = length(p);
+    float2 local = float2(r * cos(a), r * sin(a));
+    seam = abs(a) / (0.5 * sector);
+    float leaflet = length(local - float2(0.5 * size, 0.0)) - 0.44 * size;
+    float notch = length(local - float2(0.97 * size, 0.0)) - 0.13 * size;
+    return min(max(leaflet, -notch), r - 0.1 * size);
 }
 
-static void gardenFlower(thread float3 &color, float2 p, float stage, float pixel, float3 shape, float2 shift, float shadowAmount, GardenBloom bloom, constant GardenLook &look) {
+static GardenGrass gardenGrass(float3 shape, float blades, float meadow, constant GardenLook &look) {
+    float3 habit = hash33(shape * 31.0 + 2.0);
+    float3 tint = hash33(shape * 47.0 + 6.0);
+    float lean = look.grassLean * habit.y * habit.y * (1.0 - meadow);
+    float turn = habit.x * 2.0 * M_PI_F;
+    float dry = max(tint.x < 0.3 ? mix(0.12, 0.4, tint.y) : 0.0, meadow * mix(0.3, 0.55, tint.y));
+    float cool = tint.x > 0.72 ? mix(0.15, 0.45, tint.y) * (1.0 - meadow) : 0.0;
+    float shade = mix(0.93, 1.07, habit.z);
+    GardenGrass grass;
+    grass.blades = blades;
+    grass.height = min(mix(mix(0.84, 1.06, habit.z), mix(0.88, 0.95, habit.z), meadow), 1.06 * (1.0 - lean));
+    grass.width = mix(0.17, 0.13, meadow);
+    grass.curl = (tint.z - 0.5) * 2.0 * look.grassCurl;
+    grass.seeds = 0.55 * meadow;
+    grass.flowers = 0.25 * meadow;
+    grass.lean = float2(cos(turn), sin(turn)) * lean;
+    grass.deep = mix(mix(look.bladeDeep.xyz, look.bladeCool.xyz * 0.8, cool * 0.6), look.bladeStraw.xyz * 0.6, dry * 0.4) * shade;
+    grass.tip = mix(mix(look.bladeTip.xyz, look.bladeCool.xyz, cool), look.bladeStraw.xyz, dry) * shade;
+    return grass;
+}
+
+static void gardenTuft(thread float3 &color, float2 p, float stage, float pixel, float3 shape, GardenGrass grass, float2 shift, float shadowAmount, constant GardenLook &look) {
+    float grow = gardenSpring(stage);
+    float shadow = saturate(0.5 - (length(p + shift - grass.lean * 0.6) - 0.55 * grow * grass.height) / (pixel + 0.3));
+    color *= 1.0 - shadowAmount * 0.8 * shadow;
+    float present = step(1e-3, grow);
+    float detail = 1.0 - smoothstep(0.06, 0.14, pixel);
+    float2 q = p - grass.lean * length(p);
+    float r = length(q);
+    float sector = 2.0 * M_PI_F / grass.blades;
+    float angle = atan2(q.y, q.x) - shape.y * 2.0 * M_PI_F - grass.curl * r;
+    if (detail > 0.0) {
+        float fineIndex = round(angle / sector - 0.5);
+        float fineAngle = angle - sector * (fineIndex + 0.5);
+        fineIndex -= grass.blades * floor(fineIndex / grass.blades);
+        float3 fine = hash33(float3(fineIndex + 23.0, shape.z * 97.0, 8.0));
+        float fineReach = mix(0.45, 0.8, fine.x) * grass.height * grow;
+        float2 fineLocal = float2(r * cos(fineAngle), r * sin(fineAngle));
+        float fineAlong = saturate(fineLocal.x / max(fineReach, 1e-3));
+        float fineEdge = max(abs(fineLocal.y) - grass.width * 0.6 * (1.0 - fineAlong) - 0.01, fineLocal.x - fineReach);
+        float3 fineColor = mix(grass.deep, grass.tip, smoothstep(0.0, 0.9, fineAlong)) * mix(0.72, 0.92, fine.y);
+        color = mix(color, fineColor, saturate(0.5 - fineEdge / pixel) * present * detail);
+    }
+    float index = round(angle / sector);
+    float a = angle - sector * index;
+    index -= grass.blades * floor(index / grass.blades);
+    float3 blade = hash33(float3(index + 11.0, shape.z * 97.0, 5.0));
+    float reach = mix(0.7, 1.12, blade.x) * grass.height * grow;
+    float2 local = float2(r * cos(a), r * sin(a));
+    float along = saturate(local.x / max(reach, 1e-3));
+    float halfWidth = grass.width * (1.0 - along) + 0.015;
+    float edge = max(abs(local.y) - halfWidth, local.x - reach);
+    float rib = 1.0 - smoothstep(0.1, 0.4, abs(local.y) / halfWidth);
+    float3 bladeColor = mix(grass.deep, grass.tip, smoothstep(0.0, 0.8, along)) * mix(0.85, 1.15, blade.y) * (1.0 + 0.14 * detail * rib);
+    color = mix(color, bladeColor, saturate(0.5 - edge / pixel) * present);
+    float speck = (1.0 - smoothstep(0.12, 0.3, pixel)) * present;
+    if (blade.z < grass.seeds) {
+        float2 head = float2((local.x - reach * 0.9) / max(0.14 * grow, 1e-3), local.y / max(0.05 * grow, 1e-3));
+        float headEdge = (length(head) - 1.0) * 0.05 * grow;
+        float bands = smoothstep(0.2, 0.8, sin(local.x / max(grow, 1e-3) * 90.0));
+        float3 headColor = look.bladeStraw.xyz * mix(0.82, 1.05, blade.y) * (1.0 - 0.18 * detail * bands);
+        color = mix(color, headColor, saturate(0.5 - headEdge / pixel) * speck);
+    } else if (blade.z > 1.0 - grass.flowers) {
+        float late = gardenSpring(saturate(stage * 1.4 - 0.4));
+        float bloom = length(local - float2(reach + 0.03 * late, 0.0)) - 0.09 * late;
+        float3 bloomColor = blade.y < 0.35 ? look.butter.xyz : (blade.y < 0.65 ? look.white.xyz : (blade.y < 0.85 ? look.sky.xyz : look.rose.xyz));
+        float heart = saturate(0.5 - (bloom + 0.055 * late) / pixel) * detail;
+        color = mix(color, mix(bloomColor, look.eye.xyz, heart), saturate(0.5 - bloom / pixel) * speck * step(1e-3, late));
+    }
+}
+
+static void gardenLeaflets(thread float3 &color, float2 p, float size, float pixel, float detail, float shade, constant GardenLook &look) {
+    float seam;
+    float edge = gardenTrefoil(p, size, seam);
+    float r = length(p) / max(size, 1e-3);
+    float mark = (1.0 - smoothstep(0.04, 0.09, abs(r - 0.45))) * (1.0 - seam) * detail;
+    float3 tint = look.clover.xyz * shade * mix(0.82, 1.08, saturate(r)) * (1.0 - 0.25 * smoothstep(0.8, 1.0, seam)) * (1.0 - 0.2 * smoothstep(-0.05 * size, 0.0, edge));
+    color = mix(color, mix(tint, look.cloverMark.xyz, mark * 0.55), saturate(0.5 - edge / pixel) * step(1e-3, size));
+}
+
+static void gardenClover(thread float3 &color, float2 p, float stage, float pixel, float3 shape, float2 shift, float shadowAmount, constant GardenLook &look) {
+    float grow = gardenSpring(stage);
+    float detail = 1.0 - smoothstep(0.06, 0.14, pixel);
+    float shadow = saturate(0.5 - (length(p + shift * 0.6) - 0.85 * grow) / (pixel + 0.3));
+    color *= 1.0 - shadowAmount * 0.6 * shadow;
+    float count = 4.0 + floor(shape.x * 2.0);
+    float sector = 2.0 * M_PI_F / count;
+    float spin = shape.y * 2.0 * M_PI_F;
+    float slot = round((atan2(p.y, p.x) - spin) / sector);
+    float3 leaf = hash33(float3(slot - count * floor(slot / count) + 3.0, shape.z * 61.0, 9.0));
+    float turn = slot * sector + spin;
+    float unfurl = gardenSpring(saturate(stage * 1.3 - leaf.x * 0.3));
+    float2 ring = gardenTurn(p - float2(cos(turn), sin(turn)) * 0.6 * grow, turn + leaf.y * 2.0);
+    bool bloom = leaf.z < 0.25;
+    if (!bloom) {
+        gardenLeaflets(color, ring, 0.36 * unfurl, pixel, detail, mix(0.88, 1.04, leaf.y), look);
+    }
+    gardenLeaflets(color, gardenTurn(p, shape.z * 6.2831853), 0.42 * grow, pixel, detail, 1.0, look);
+    if (bloom) {
+        float head = length(ring) - 0.2 * unfurl;
+        float florets = smoothstep(0.2, 0.9, sin(length(ring) / max(unfurl, 1e-3) * 80.0));
+        float3 headColor = mix(look.cloverBloom.xyz, look.rose.xyz, step(0.5, leaf.y) * 0.5) * mix(1.05, 0.8, smoothstep(-0.08, 0.0, head)) * (1.0 - 0.14 * detail * florets);
+        color = mix(color, headColor, saturate(0.5 - head / pixel) * step(1e-3, unfurl));
+    }
+}
+
+static void gardenSpikes(thread float3 &color, float2 q, float bud, float open, float swell, float pixel, float detail, float3 shape, float pick, constant GardenLook &look) {
+    float3 petalColor = pick < 0.4 ? look.lavender.xyz : (pick < 0.58 ? look.violet.xyz : (pick < 0.74 ? look.poppy.xyz : (pick < 0.88 ? look.rose.xyz : look.white.xyz)));
+    float3 baseColor = pick < 0.58 ? look.indigo.xyz : petalColor * 0.55;
+    float3 budColor = mix(look.leaf.xyz, look.sage.xyz, 0.5);
+    float sector = 2.0 * M_PI_F / (3.0 + floor(shape.x * 3.0));
+    float r = length(q);
+    float angle = atan2(q.y, q.x) - (shape.z - 0.5) * 0.9 * r;
+    float a = angle - sector * round(angle / sector);
+    float2 local = float2(r * cos(a), r * sin(a));
+    float grow = max(swell, 0.6 * bud);
+    float present = step(0.01, bud);
+    float stem = max(abs(local.y) - 0.03, local.x - 0.36 * grow);
+    color = mix(color, budColor * 0.85, saturate(0.5 - stem / pixel) * present);
+    float start = 0.3 * grow;
+    float span = 0.66 * grow;
+    float t = saturate((local.x - start) / max(span, 1e-3));
+    float bead = 2.0 * fract(t * 5.0) - 1.0;
+    float plump = sqrt(saturate(1.0 - bead * bead));
+    float halfWidth = mix(0.15, 0.04, t) * grow * (1.0 - 0.35 * detail * (1.0 - plump));
+    float edge = max(abs(local.y) - halfWidth, max(start - local.x, local.x - start - span));
+    float blossom = smoothstep(t - 0.15, t + 0.05, open * 1.2);
+    float3 tint = mix(baseColor, mix(petalColor, look.white.xyz, 0.2), t) * mix(0.92, 0.8 + 0.3 * plump, detail);
+    tint = mix(budColor, tint, blossom) * (1.0 - 0.2 * smoothstep(-0.05, 0.0, edge));
+    color = mix(color, tint, saturate(0.5 - edge / pixel) * present);
+}
+
+static void gardenPoppy(thread float3 &color, float2 q, float bud, float open, float swell, float pixel, float detail, float3 shape, float pick, constant GardenLook &look) {
+    float3 petalColor = pick < 0.4 ? look.poppy.xyz : (pick < 0.6 ? look.coral.xyz : (pick < 0.72 ? look.white.xyz : (pick < 0.86 ? look.butter.xyz : look.magenta.xyz)));
+    float3 blotchColor = pick < 0.86 ? look.eyeDark.xyz : look.plum.xyz;
+    float blotch = pick < 0.6 || pick >= 0.86 ? 0.75 : 0.0;
+    float3 eyeColor = pick >= 0.72 && pick < 0.86 ? mix(look.leaf.xyz, look.butter.xyz, 0.35) : blotchColor;
+    GardenPetal petal = gardenPetal(q, 4.0, 0.0, swell, 1.15 * swell);
+    float edge = petal.edge + 0.03 * swell * petal.along * sin(petal.angle * 22.0 + shape.z * 6.2831853);
+    float cover = saturate(0.5 - edge / pixel) * saturate(open * 6.0);
+    float3 tint = mix(petalColor * mix(0.8, 1.06, petal.along), blotchColor, blotch * (1.0 - smoothstep(0.22, 0.42, petal.along)));
+    tint *= 1.0 - 0.07 * detail * smoothstep(0.4, 1.0, sin(petal.angle * 46.0));
+    tint *= (1.0 - 0.22 * smoothstep(0.75, 1.0, petal.seam)) * (1.0 - 0.18 * smoothstep(-0.1, 0.0, edge));
+    color = mix(color, tint, cover);
+    float r = length(q);
+    float stamens = (1.0 - smoothstep(0.025, 0.05, abs(r - 0.27 * swell))) * smoothstep(0.2, 0.6, sin(petal.angle * 26.0)) * detail * open;
+    color = mix(color, look.eyeDark.xyz * 0.8, stamens * cover);
+    float eye = r - mix(0.3 * bud, 0.2, open);
+    float eyeCover = saturate(0.5 - eye / pixel) * step(0.01, bud);
+    float rays = smoothstep(0.55, 0.95, cos(petal.angle * 8.0)) * (1.0 - smoothstep(0.08, 0.18, r)) * detail * open;
+    float3 eyeTint = mix(mix(look.leaf.xyz, petalColor, 0.55), eyeColor, open) * mix(1.08, 0.82, smoothstep(-0.1, 0.0, eye));
+    color = mix(color, mix(eyeTint, mix(look.leaf.xyz, look.white.xyz, 0.35), rays * 0.6), eyeCover);
+}
+
+static void gardenPrimrose(thread float3 &color, float2 q, float bud, float open, float swell, float pixel, float pick, constant GardenLook &look) {
+    float3 petalColor = pick < 0.2 ? look.coral.xyz : (pick < 0.4 ? look.butter.xyz : (pick < 0.58 ? look.rose.xyz : (pick < 0.74 ? look.magenta.xyz : (pick < 0.88 ? look.white.xyz : look.sky.xyz))));
+    float3 eyeColor = pick >= 0.2 && pick < 0.4 ? look.coral.xyz : look.eye.xyz;
+    GardenPetal petal = gardenPetal(q, 5.0, 0.0, swell, 0.82 * swell);
+    float edge = max(petal.edge, 0.14 * swell - length(petal.local - float2(swell, 0.0)));
+    float cover = saturate(0.5 - edge / pixel) * saturate(open * 6.0);
+    float3 tint = mix(petalColor, look.white.xyz, 0.3 * (1.0 - smoothstep(0.2, 0.45, petal.along))) * mix(0.8, 1.06, petal.along);
+    tint *= (1.0 - 0.18 * smoothstep(0.7, 1.0, petal.seam)) * (1.0 - 0.22 * smoothstep(-0.1, 0.0, edge));
+    color = mix(color, tint, cover);
+    float eye = length(q) - mix(0.3 * bud, 0.18, open);
+    float eyeCover = saturate(0.5 - eye / pixel) * step(0.01, bud);
+    float3 eyeTint = mix(mix(look.leaf.xyz, petalColor, 0.55), eyeColor, open) * mix(1.08, 0.82, smoothstep(-0.1, 0.0, eye));
+    color = mix(color, eyeTint, eyeCover);
+}
+
+static void gardenDaisy(thread float3 &color, float2 q, float bud, float open, float swell, float pixel, float detail, float3 shape, float pick, float2 sun, constant GardenLook &look) {
+    float3 petalColor = pick < 0.62 ? look.white.xyz : (pick < 0.76 ? look.butter.xyz : (pick < 0.88 ? look.lavender.xyz : look.rose.xyz));
+    float3 eyeColor = pick >= 0.62 && pick < 0.76 ? look.eyeDark.xyz : look.eye.xyz;
+    float tipped = pick >= 0.45 && pick < 0.62 ? 0.7 : 0.0;
+    GardenPetal petal = gardenPetal(q, 16.0 + floor(shape.x * 5.0), 0.15 * swell, 0.85 * swell, 0.2 * swell);
+    float cover = saturate(0.5 - petal.edge / pixel) * saturate(open * 6.0);
+    float3 tint = mix(petalColor, look.rose.xyz, tipped * smoothstep(0.65, 1.0, petal.along)) * mix(0.8, 1.06, petal.along);
+    tint *= (1.0 - 0.18 * smoothstep(0.7, 1.0, petal.seam)) * (1.0 - 0.22 * smoothstep(-0.1, 0.0, petal.edge));
+    color = mix(color, tint, cover);
+    float r = length(q);
+    float eye = r - mix(0.3 * bud, 0.3, open);
+    float eyeCover = saturate(0.5 - eye / pixel) * step(0.01, bud);
+    float florets = smoothstep(0.2, 0.8, sin(r * 70.0 + petal.angle * 8.0) * sin(r * 70.0 - petal.angle * 13.0));
+    float3 eyeTint = mix(mix(look.leaf.xyz, petalColor, 0.55), eyeColor, open) * mix(1.08, 0.82, smoothstep(-0.1, 0.0, eye));
+    eyeTint *= (1.0 + 0.5 * dot(q, sun)) * (1.0 - 0.2 * florets * detail * open);
+    color = mix(color, eyeTint, eyeCover);
+}
+
+static void gardenTulip(thread float3 &color, float2 q, float bud, float open, float swell, float pixel, float detail, float pick, float2 sun, constant GardenLook &look) {
+    float3 petalColor = pick < 0.2 ? look.poppy.xyz : (pick < 0.32 ? look.coral.xyz : (pick < 0.46 ? look.butter.xyz : (pick < 0.6 ? look.rose.xyz : (pick < 0.72 ? look.magenta.xyz : (pick < 0.82 ? look.plum.xyz : (pick < 0.92 ? look.white.xyz : look.violet.xyz))))));
+    float cup = max(0.6 * bud, swell);
+    float present = step(0.01, bud);
+    float3 tint = mix(mix(look.leaf.xyz, petalColor, 0.45), petalColor, smoothstep(0.0, 0.5, open));
+    GardenPetal inner = gardenPetal(gardenTurn(q, M_PI_F / 3.0), 3.0, 0.0, 0.8 * cup, 0.95 * cup);
+    color = mix(color, tint * mix(0.55, 0.85, inner.along), saturate(0.5 - inner.edge / pixel) * present);
+    GardenPetal outer = gardenPetal(q, 3.0, 0.0, 0.95 * cup, 1.15 * cup);
+    float3 shell = tint * mix(0.72, 1.08, outer.along) * (1.0 + 0.25 * dot(q, sun));
+    shell *= (1.0 - 0.2 * smoothstep(0.7, 1.0, outer.seam)) * (1.0 - 0.15 * smoothstep(-0.08, 0.0, outer.edge));
+    shell = mix(shell, look.white.xyz, 0.18 * detail * smoothstep(0.8, 0.98, outer.along));
+    color = mix(color, shell, saturate(0.5 - outer.edge / pixel) * present);
+    float r = length(q);
+    float opening = step(0.01, open);
+    float throat = r - 0.3 * open * (1.0 - 0.18 * cos(3.0 * outer.angle));
+    float3 well = mix(tint * 0.5, look.eyeDark.xyz, 0.45) * mix(0.7, 1.0, saturate(r / max(0.3 * open, 1e-3)));
+    color = mix(color, well, saturate(0.5 - throat / pixel) * opening);
+    color = mix(color, look.eyeDark.xyz * 0.7, saturate(0.5 - (r - 0.07 * open) / pixel) * detail * opening);
+}
+
+static void gardenCornflower(thread float3 &color, float2 q, float bud, float open, float swell, float pixel, float detail, float3 shape, float pick, constant GardenLook &look) {
+    float3 petalColor = pick < 0.55 ? look.cornflower.xyz : (pick < 0.68 ? look.violet.xyz : (pick < 0.8 ? look.rose.xyz : (pick < 0.9 ? look.white.xyz : look.plum.xyz)));
+    float3 heartColor = pick < 0.55 || (pick >= 0.8 && pick < 0.9) ? look.indigo.xyz : look.plum.xyz * 0.7;
+    float sector = 2.0 * M_PI_F / (7.0 + floor(shape.x * 3.0));
+    float angle = atan2(q.y, q.x);
+    float a = angle - sector * round(angle / sector);
+    float r = length(q);
+    float2 local = float2(r * cos(a), r * sin(a));
+    float t = saturate((local.x - 0.12 * swell) / max(0.78 * swell, 1e-3));
+    float halfWidth = mix(0.05, 0.2, t) * swell;
+    float teeth = abs(fract(local.y / max(halfWidth, 1e-3) * 1.6 + 0.5) - 0.5) * 2.0;
+    float edge = max(abs(local.y) - halfWidth, local.x - 0.9 * swell + 0.08 * swell * teeth * mix(0.3, 1.0, detail));
+    float3 tint = petalColor * mix(0.68, 1.08, t) * (1.0 - 0.18 * detail * (1.0 - smoothstep(0.0, 0.035, abs(local.y))));
+    tint *= 1.0 - 0.2 * smoothstep(-0.06, 0.0, edge);
+    color = mix(color, tint, saturate(0.5 - edge / pixel) * saturate(open * 6.0));
+    float heart = r - mix(0.3 * bud, 0.25, open);
+    float speckle = smoothstep(0.4, 0.9, sin(q.x * 48.0) * sin(q.y * 48.0)) * detail * open;
+    float3 heartTint = mix(mix(look.leaf.xyz, petalColor, 0.5), heartColor, open) * mix(1.1, 0.8, smoothstep(-0.1, 0.0, heart));
+    color = mix(color, mix(heartTint, petalColor * 0.8, speckle * 0.5), saturate(0.5 - heart / pixel) * step(0.01, bud));
+}
+
+static void gardenStarlet(thread float3 &color, float2 p, float size, float bud, float open, float pixel, float detail, float3 petalColor, constant GardenLook &look) {
+    float scale = max(size, 1e-3);
+    float2 s = p / scale;
+    float starPixel = pixel / scale;
+    float present = step(1e-3, size);
+    float r = length(s);
+    float star = gardenStar(s, 0.5) - 0.12;
+    float3 tint = mix(petalColor, look.white.xyz, 0.5 * detail * (1.0 - smoothstep(0.3, 0.42, r))) * mix(0.82, 1.06, saturate(r)) * (1.0 - 0.2 * smoothstep(-0.12, 0.0, star));
+    color = mix(color, tint, saturate(0.5 - star / starPixel) * saturate(open * 6.0) * present);
+    float eye = r - mix(0.45 * bud, 0.2, open);
+    float3 eyeTint = mix(mix(look.leaf.xyz, petalColor, 0.5), look.eye.xyz, open);
+    color = mix(color, eyeTint, saturate(0.5 - eye / starPixel) * step(0.01, bud) * present);
+}
+
+static void gardenStarlets(thread float3 &color, float2 q, float bud, float open, float swell, float pixel, float detail, float3 shape, float pick, constant GardenLook &look) {
+    float3 petalColor = pick < 0.4 ? look.sky.xyz : (pick < 0.62 ? look.white.xyz : (pick < 0.82 ? look.rose.xyz : look.lavender.xyz));
+    float count = 5.0 + floor(shape.x * 2.0);
+    float sector = 2.0 * M_PI_F / count;
+    float turn = sector * round(atan2(q.y, q.x) / sector);
+    float spread = max(swell, 0.6 * bud);
+    float2 ring = gardenTurn(q - float2(cos(turn), sin(turn)) * 0.58 * spread, turn + shape.z * 4.0);
+    gardenStarlet(color, ring, 1.5 / count * spread, bud, open, pixel, detail, petalColor, look);
+    gardenStarlet(color, gardenTurn(q, shape.z * 6.2831853), 0.34 * spread, bud, open, pixel, detail, petalColor, look);
+}
+
+static GardenHabit gardenHabit(GardenSpecies species) {
+    if (species == GardenSpecies::spike) {
+        return GardenHabit{4.0, 0.8, 0.16, 0.7, 1.3, 0.6};
+    }
+    if (species == GardenSpecies::poppy) {
+        return GardenHabit{2.0, 1.05, 0.45, 0.4, 1.2, 0.9};
+    }
+    if (species == GardenSpecies::primrose) {
+        return GardenHabit{4.0, 1.08, 0.6, 0.0, 0.8, 0.85};
+    }
+    if (species == GardenSpecies::daisy) {
+        return GardenHabit{2.0, 1.05, 0.4, 0.0, 1.0, 0.85};
+    }
+    if (species == GardenSpecies::tulip) {
+        return GardenHabit{2.0, 1.1, 0.5, 0.45, 1.3, 0.75};
+    }
+    if (species == GardenSpecies::cornflower) {
+        return GardenHabit{3.0, 1.0, 0.2, 0.6, 1.15, 0.8};
+    }
+    return GardenHabit{4.0, 0.85, 0.34, 0.15, 0.85, 0.9};
+}
+
+static GardenSpecies gardenSpecies(float roll, float climate, float bias) {
+    return static_cast<GardenSpecies>(min(int((roll * (1.0 - bias) + climate * bias) * 7.0), 6));
+}
+
+static void gardenFlower(thread float3 &color, float2 p, float stage, float pixel, float3 shape, GardenSpecies species, float pick, float2 shift, float2 light, float shadowAmount, constant GardenLook &look) {
     float bud = smoothstep(0.0, 0.4, stage);
     float open = saturate((stage - 0.2) / 0.8);
     float swell = gardenSpring(open);
     float spin = shape.y * 2.0 * M_PI_F;
+    float detail = 1.0 - smoothstep(0.05, 0.14, pixel);
+    GardenHabit habit = gardenHabit(species);
 
-    float shadow = saturate(0.5 - (length(p + shift) - 0.85 * max(swell, 0.5 * bud)) / (pixel + 0.3));
+    float shadow = saturate(0.5 - (length(p + shift * habit.height) - habit.spread * max(swell, 0.5 * bud)) / (pixel + 0.3));
     color *= 1.0 - shadowAmount * shadow;
 
     float2 leafPoint = gardenTurn(p, spin + 1.3);
-    float leaf = gardenPetals(leafPoint, 2.0, 0.08, 1.05 * bud, 0.4 * bud);
-    float leafCover = saturate(0.5 - leaf / pixel) * step(0.01, bud);
-    color = mix(color, look.leaf.xyz * mix(0.75, 1.1, saturate(length(leafPoint))), leafCover);
+    GardenPetal leaf = gardenPetal(leafPoint, habit.leaves, 0.08, habit.leafReach * bud, habit.leafBreadth * bud);
+    float leafCover = saturate(0.5 - leaf.edge / pixel) * step(0.01, bud);
+    float3 leafColor = mix(look.leaf.xyz, look.sage.xyz, habit.leafSage) * mix(0.75, 1.1, saturate(length(leafPoint)));
+    color = mix(color, leafColor, leafCover);
 
-    float2 q = gardenTurn(p, spin + (1.0 - open) * 0.9);
-    float petal = gardenPetals(q, bloom.count, bloom.inner * swell, bloom.reach * swell, bloom.breadth * swell);
-    float petalCover = saturate(0.5 - petal / pixel) * saturate(open * 6.0);
-    float seam = abs(fract(atan2(q.y, q.x) * bloom.count / (2.0 * M_PI_F) + 0.5) - 0.5) * 2.0;
-    float radial = saturate(length(q) / max((bloom.inner + bloom.reach) * swell, 1e-3));
-    float3 petalColor = bloom.petal * mix(0.8, 1.06, radial);
-    petalColor *= (1.0 - 0.18 * smoothstep(0.7, 1.0, seam)) * (1.0 - 0.22 * smoothstep(-0.1, 0.0, petal));
-    color = mix(color, petalColor, petalCover);
-
-    float eye = length(p) - mix(0.3 * bud, bloom.eye, open);
-    float eyeCover = saturate(0.5 - eye / pixel) * step(0.01, bud);
-    float3 eyeColor = mix(mix(look.leaf.xyz, bloom.petal, 0.55), bloom.center, open) * mix(1.08, 0.82, smoothstep(-0.1, 0.0, eye));
-    color = mix(color, eyeColor, eyeCover);
+    float turn = spin + (1.0 - open) * 0.9;
+    float2 q = gardenTurn(p, turn);
+    float2 sun = gardenTurn(light, turn);
+    if (species == GardenSpecies::spike) {
+        gardenSpikes(color, q, bud, open, swell, pixel, detail, shape, pick, look);
+    } else if (species == GardenSpecies::poppy) {
+        gardenPoppy(color, q, bud, open, swell, pixel, detail, shape, pick, look);
+    } else if (species == GardenSpecies::primrose) {
+        gardenPrimrose(color, q, bud, open, swell, pixel, pick, look);
+    } else if (species == GardenSpecies::daisy) {
+        gardenDaisy(color, q, bud, open, swell, pixel, detail, shape, pick, sun, look);
+    } else if (species == GardenSpecies::tulip) {
+        gardenTulip(color, q, bud, open, swell, pixel, detail, pick, sun, look);
+    } else if (species == GardenSpecies::cornflower) {
+        gardenCornflower(color, q, bud, open, swell, pixel, detail, shape, pick, look);
+    } else {
+        gardenStarlets(color, q, bud, open, swell, pixel, detail, shape, pick, look);
+    }
 }
 
-static void gardenTuft(thread float3 &color, float2 p, float stage, float pixel, float3 shape, float blades, float2 shift, float shadowAmount, constant GardenLook &look) {
-    float grow = gardenSpring(stage);
-    float shadow = saturate(0.5 - (length(p + shift) - 0.55 * grow) / (pixel + 0.3));
-    color *= 1.0 - shadowAmount * 0.8 * shadow;
-    float sector = 2.0 * M_PI_F / blades;
-    float angle = atan2(p.y, p.x) - shape.y * 2.0 * M_PI_F;
-    float index = round(angle / sector);
-    float a = angle - sector * index;
-    float3 blade = hash33(float3(index + 11.0, shape.z * 97.0, 5.0));
-    float reach = mix(0.7, 1.15, blade.x) * grow;
-    float r = length(p);
-    float2 local = float2(r * cos(a), r * sin(a));
-    float along = saturate(local.x / max(reach, 1e-3));
-    float halfWidth = 0.17 * (1.0 - along) + 0.015;
-    float edge = max(abs(local.y) - halfWidth, local.x - reach);
-    float cover = saturate(0.5 - edge / pixel) * step(1e-3, grow);
-    float3 bladeColor = mix(look.bladeDeep.xyz, look.bladeTip.xyz, smoothstep(0.0, 0.8, along)) * mix(0.85, 1.15, blade.y);
-    color = mix(color, bladeColor, cover);
-}
-
-static void gardenBouquet(thread float3 &color, float2 p, float2 times, float clock, float delay, float pixel, float3 random, int flowers, float2 shift, float shadowAmount, constant GardenLook &look) {
+static void gardenBouquet(thread float3 &color, float2 p, float2 times, float clock, float delay, float pixel, float3 random, int flowers, float climate, float2 shift, float2 light, float shadowAmount, constant GardenLook &look) {
     float clump = gardenAge(times, clock, delay, look);
     if (clump > 0.0 && length(p) < 0.88 + length(shift) * 0.75 + pixel) {
-        gardenTuft(color, p / 0.75, clump, pixel / 0.75, random, 14.0 + floor(random.z * 5.0), shift, shadowAmount, look);
+        gardenTuft(color, p / 0.75, clump, pixel / 0.75, random, gardenGrass(random, 12.0 + floor(random.z * 7.0), 0.0, look), shift, shadowAmount, look);
     }
+    float3 mixture = hash33(random * 23.0 + 5.0);
+    int first = static_cast<int>(gardenSpecies(mixture.x, climate, look.climateBias));
+    int second = 1 + int(mixture.y * 6.0);
+    int third = 1 + int(mixture.z * 5.0);
+    third += third >= second ? 1 : 0;
+    int kinds = flowers > 4 ? 3 : (flowers > 3 || mixture.z > 0.55 ? 2 : 1);
     float turn = random.x * 2.0 * M_PI_F;
     for (int index = 0; index < flowers; index++) {
         float order = float(index) / float(flowers);
@@ -359,7 +677,7 @@ static void gardenBouquet(thread float3 &color, float2 p, float2 times, float cl
         float size = mix(0.32, 0.46, place.z);
         float2 q = (p - float2(cos(angle), sin(angle)) * reach) / size;
         float itemPixel = pixel / size;
-        if (length(q) > 1.2 + length(shift) + itemPixel) {
+        if (length(q) > 1.2 + length(shift) * 1.3 + itemPixel) {
             continue;
         }
         float age = gardenAge(times, clock, delay + 0.1 + look.bouquetDelay * order + 0.08 * place.x, look);
@@ -367,8 +685,9 @@ static void gardenBouquet(thread float3 &color, float2 p, float2 times, float cl
             continue;
         }
         float3 pick = hash33(place * 17.0 + 3.0);
-        float3 eye = pick.z < 0.3 ? look.eyeDark.xyz : look.eye.xyz;
-        gardenFlower(color, q, age, itemPixel, pick, shift, shadowAmount, gardenBloom(pick.y, gardenHue(random.y, pick.x, look), eye, look), look);
+        int offset = kinds == 1 || order + 0.35 * (pick.z - 0.5) > 0.45 ? 0 : (kinds == 3 && pick.y > 0.5 ? third : second);
+        GardenSpecies species = static_cast<GardenSpecies>((first + offset) % 7);
+        gardenFlower(color, q, age, itemPixel, pick, species, fract(random.y + (pick.x - 0.5) * 0.3), shift, light, shadowAmount, look);
     }
 }
 
@@ -383,6 +702,7 @@ static void gardenPlant(thread float3 &color,
                         float footprint,
                         float clock,
                         float2 shift,
+                        float2 light,
                         float shadowAmount,
                         texture2d<float> bloomTexture,
                         texture2d<float> coastTexture,
@@ -395,7 +715,8 @@ static void gardenPlant(thread float3 &color,
     float radius = cellSize * size * mix(0.85, 1.0, cell.shape.x);
     float pixel = footprint / radius;
     float2 p = cell.offset / radius;
-    if (length(p) > 1.15 + length(shift) * 0.4 + pixel) {
+    float bound = variety == 0 ? 1.22 + length(shift) * 0.4 : 1.15 + length(shift) * 0.6;
+    if (length(p) > bound + pixel) {
         return;
     }
     float2 times = gardenTimes(bloomTexture, cell.spot);
@@ -408,11 +729,20 @@ static void gardenPlant(thread float3 &color,
     }
     float3 random = hash33(cell.random * 41.0 + seed);
     if (variety == 0) {
-        gardenTuft(color, p, gardenAge(times, clock, delay, look), pixel, random, 7.0 + floor(random.z * 3.0), shift, shadowAmount, look);
+        float age = gardenAge(times, clock, delay, look);
+        float patch = hash33(float3(floor(cell.spot * float2(360.0, 180.0) / look.patchCell), 13.0)).x;
+        if (patch < look.cloverChance && random.x < 0.7) {
+            gardenClover(color, p, age, pixel, random, shift, shadowAmount, look);
+            return;
+        }
+        float meadow = patch > 1.0 - look.meadowChance && random.x < 0.75 ? 1.0 : 0.0;
+        float blades = mix(5.0 + floor(random.z * 7.0), 9.0 + floor(random.z * 5.0), meadow);
+        gardenTuft(color, p, age, pixel, random, gardenGrass(random, blades, meadow, look), shift, shadowAmount, look);
         return;
     }
+    float climate = saturate((abs(90.0 - cell.spot.y * 180.0) - 12.0) / 46.0);
     int flowers = variety == 1 ? 2 + int(random.z * 2.0) : 4 + int(random.z * 3.0);
-    gardenBouquet(color, p, times, clock, delay, pixel, random, flowers, shift, shadowAmount, look);
+    gardenBouquet(color, p, times, clock, delay, pixel, random, flowers, climate, shift, light, shadowAmount, look);
 }
 
 fragment half4 gardenFragment(MeshFragmentIn in [[stage_in]],
@@ -486,9 +816,9 @@ fragment half4 gardenFragment(MeshFragmentIn in [[stage_in]],
         float shore = (1.0 - smoothstep(look.shoreWidth * 0.4, look.shoreWidth, coast)) * saturate(look.shoreWidth / coastWidth - 0.5);
         ground = mix(ground, look.shore.xyz, shore);
         if (clock > 0.0) {
-            gardenPlant(ground, 0, look.grassCell, look.grassChance, 0.3, 11.0, coordinates.uv, cosLatitude, footprint, clock, shift, shadowAmount, bloomTexture, coastTexture, surfaceSampler, look);
-            gardenPlant(ground, 1, look.clusterCell, look.clusterChance, look.bouquetSize, 23.0, coordinates.uv, cosLatitude, footprint, clock, shift, shadowAmount, bloomTexture, coastTexture, surfaceSampler, look);
-            gardenPlant(ground, 2, look.bouquetCell, look.bouquetChance, look.bouquetSize, 37.0, coordinates.uv, cosLatitude, footprint, clock, shift, shadowAmount, bloomTexture, coastTexture, surfaceSampler, look);
+            gardenPlant(ground, 0, look.grassCell, look.grassChance, 0.3, 11.0, coordinates.uv, cosLatitude, footprint, clock, shift, light * daylight, shadowAmount, bloomTexture, coastTexture, surfaceSampler, look);
+            gardenPlant(ground, 1, look.clusterCell, look.clusterChance, look.bouquetSize, 23.0, coordinates.uv, cosLatitude, footprint, clock, shift, light * daylight, shadowAmount, bloomTexture, coastTexture, surfaceSampler, look);
+            gardenPlant(ground, 2, look.bouquetCell, look.bouquetChance, look.bouquetSize, 37.0, coordinates.uv, cosLatitude, footprint, clock, shift, light * daylight, shadowAmount, bloomTexture, coastTexture, surfaceSampler, look);
         }
     }
 

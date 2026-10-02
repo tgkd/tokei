@@ -13,6 +13,8 @@ struct SakuraLook {
     float4 landLow;
     float4 landHigh;
     float4 landCrest;
+    float4 paper;
+    float4 komon;
     float4 landShade;
     float4 landNight;
     float4 petalLight;
@@ -31,10 +33,10 @@ struct SakuraLook {
     float shoreWidth;
     float clumpScale;
     float clumpDepth;
-    float blossomSize;
-    float blossomDensity;
-    float budSize;
-    float budDensity;
+    float paperShore;
+    float paperGrain;
+    float komonSize;
+    float komonDensity;
     float raftSize;
     float raftWidth;
     float raftDensity;
@@ -56,18 +58,18 @@ struct SakuraLook {
     float grain;
 };
 
-struct SakuraBloom {
-    float coverage;
-    float depth;
-    float eye;
-    float tint;
-};
-
 struct SakuraCell {
     float2 offset;
     float3 random;
     float3 shape;
     float present;
+};
+
+struct SakuraBedPetal {
+    float4 from;
+    float4 to;
+    float4 pose;
+    float4 timing;
 };
 
 static float sakuraNoise(float3 p) {
@@ -123,30 +125,6 @@ static SakuraCell sakuraCell(float2 uv, float cosLatitude, float cell, float see
     return result;
 }
 
-static SakuraBloom sakuraBloom(float2 uv, float cosLatitude, float size, float density, float seed, float footprint) {
-    SakuraBloom bloom = {0.0, 0.0, 0.0, 0.0};
-    SakuraCell cell = sakuraCell(uv, cosLatitude, size * 3.2, seed, 0.2);
-    if (cell.random.x > density) {
-        return bloom;
-    }
-    float radius = size * mix(0.75, 1.15, cell.shape.x);
-    float pixel = max(footprint / radius, 1e-4);
-    float r = length(cell.offset) / radius;
-    if (r > 1.1 + pixel) {
-        return bloom;
-    }
-    float angle = atan2(cell.offset.y, cell.offset.x) + cell.shape.y * 6.2831853;
-    float sector = 2.0 * M_PI_F / 5.0;
-    float a = angle - sector * round(angle / sector);
-    float2 local = float2(r * cos(a) * 2.0 - 1.0, r * sin(a) * 2.6);
-    float petal = sakuraPetalShape(local) * 0.5;
-    bloom.coverage = saturate(0.5 - petal / pixel);
-    bloom.depth = saturate(1.0 - r);
-    bloom.eye = saturate(0.5 - (r - 0.15) / pixel) * (1.0 - smoothstep(0.07, 0.16, pixel));
-    bloom.tint = cell.shape.z;
-    return bloom;
-}
-
 static float sakuraRaftPetal(float2 uv, float cosLatitude, float size, float density, float seed, float footprint, thread float &tint) {
     SakuraCell cell = sakuraCell(uv, cosLatitude, size * 3.0, seed, 0.3);
     if (cell.random.x > density) {
@@ -159,6 +137,26 @@ static float sakuraRaftPetal(float2 uv, float cosLatitude, float size, float den
     float2 local = float2(dot(cell.offset, axis), dot(cell.offset, float2(-axis.y, axis.x))) / extent;
     tint = cell.shape.z;
     return saturate(0.5 - sakuraPetalShape(local) / pixel);
+}
+
+static float2 sakuraKomon(float2 uv, float cosLatitude, float size, float density, float footprint) {
+    SakuraCell cell = sakuraCell(uv, cosLatitude, size, 41.0, 0.2);
+    if (cell.random.x > density) {
+        return float2(0.0);
+    }
+    float radius = size * mix(0.24, 0.31, cell.shape.x);
+    float pixel = max(footprint / radius, 1e-4);
+    float r = length(cell.offset) / radius;
+    if (r > 1.2 + pixel) {
+        return float2(0.0);
+    }
+    float angle = atan2(cell.offset.y, cell.offset.x) + cell.shape.y * 6.2831853;
+    float sector = 2.0 * M_PI_F / 5.0;
+    float a = angle - sector * round(angle / sector);
+    float petal = sakuraPetalShape(float2(r * cos(a) * 2.0 - 1.0, r * sin(a) * 2.6)) * 0.5;
+    float line = saturate(0.5 - (abs(petal) - 0.07) / pixel);
+    float fill = saturate(0.5 - petal / pixel);
+    return float2(line, fill);
 }
 
 fragment half4 sakuraFragment(MeshFragmentIn in [[stage_in]],
@@ -208,21 +206,9 @@ fragment half4 sakuraFragment(MeshFragmentIn in [[stage_in]],
     float clumpNear = 1.0 - smoothstep(0.2, 0.55, footprint / clumpCell);
     float clumpFine = 1.0 - smoothstep(0.2, 0.55, footprint * 2.3 / clumpCell);
     float clump = 0.5;
-    SakuraBloom bloom = {0.0, 0.0, 0.0, 0.0};
-    SakuraBloom bud = {0.0, 0.0, 0.0, 0.0};
-    float bloomDetail = 0.0;
-    float budDetail = 0.0;
     if (land > 0.0) {
         clump = 0.5 + (sakuraNoise(nG * look.clumpScale) - 0.5) * clumpNear * 0.7
                     + (sakuraNoise(nG * look.clumpScale * 2.3 + 11.0) - 0.5) * clumpFine * 0.45;
-        bloomDetail = 1.0 - smoothstep(0.3, 0.75, footprint / look.blossomSize);
-        budDetail = 1.0 - smoothstep(0.3, 0.75, footprint / look.budSize);
-        if (bloomDetail > 0.0) {
-            bloom = sakuraBloom(coordinates.uv, cosLatitude, look.blossomSize, look.blossomDensity, 5.0, footprint);
-        }
-        if (budDetail > 0.0) {
-            bud = sakuraBloom(coordinates.uv, cosLatitude, look.budSize, look.budDensity, 13.0, footprint);
-        }
     }
 
     float variety = sakuraNoise(nG * 7.0 + 5.0) * 0.65 + sakuraNoise(nG * 17.0 + 9.0) * 0.35;
@@ -232,15 +218,15 @@ fragment half4 sakuraFragment(MeshFragmentIn in [[stage_in]],
     canopy = mix(canopy, look.landCrest.xyz, smoothstep(0.55, 1.0, height) * 0.8);
     canopy *= 1.0 + look.clumpDepth * (clump - 0.5) * 2.0;
     canopy = mix(canopy, look.petalDeep.xyz * 0.92, saturate((0.44 - clump) * 3.0) * 0.28);
-    float speckle = look.blossomDensity * 0.3 * (1.0 - bloomDetail) + look.budDensity * 0.25 * (1.0 - budDetail);
-    canopy = mix(canopy, look.petalLight.xyz, speckle * 0.45);
-    float3 bloomColor = mix(look.petalLight.xyz, look.petalDeep.xyz, saturate(bloom.depth * 1.3) * 0.75 + bloom.tint * 0.25);
-    bloomColor = mix(bloomColor, look.blossomEye.xyz, bloom.eye);
-    canopy = mix(canopy, bloomColor, max(bloom.coverage, bloom.eye) * bloomDetail);
-    float3 budColor = mix(look.petalLight.xyz, look.petalDeep.xyz, 0.35 + bud.tint * 0.5);
-    budColor = mix(budColor, look.blossomEye.xyz, bud.eye * 0.8);
-    canopy = mix(canopy, budColor, max(bud.coverage, bud.eye) * budDetail * 0.9);
-    float petals = max(bloom.coverage * bloomDetail, bud.coverage * budDetail);
+    float paperShare = land * smoothstep(look.paperShore * 0.35, look.paperShore, coast);
+    float komonDetail = 1.0 - smoothstep(0.035, 0.06, footprint / look.komonSize);
+    float2 komon = float2(0.0);
+    if (paperShare > 0.0 && komonDetail > 0.0) {
+        komon = sakuraKomon(coordinates.uv, cosLatitude, look.komonSize, look.komonDensity, footprint) * komonDetail;
+    }
+    float3 paper = look.paper.xyz * (1.0 + look.paperGrain * ((variety - 0.5) * 0.6 + (clump - 0.5)));
+    paper = mix(paper, look.komon.xyz, max(komon.x, komon.y * 0.25));
+    canopy = mix(canopy, paper, paperShare);
 
     float seaward = max(-coast, 0.0);
     float shallow = exp(-seaward / look.shallowWidth);
@@ -273,11 +259,11 @@ fragment half4 sakuraFragment(MeshFragmentIn in [[stage_in]],
     float warmth = (1.0 - smoothstep(0.0, look.twilightWidth, muG)) * smoothstep(-0.07, 0.03, muG);
     day = mix(day, day * look.dusk.xyz * 1.35, warmth * mix(0.4, 0.25, water));
     float back = saturate(dot(direction, sun));
-    float transmit = look.transmission * warmth * (0.3 + 0.7 * back) * land * (0.55 + 0.45 * petals);
+    float transmit = look.transmission * warmth * (0.3 + 0.7 * back) * land * 0.55;
 
     float viewCosine = saturate(dot(nG, view));
     float facing = saturate(dot(nM, view));
-    float3 nightLand = look.landNight.xyz * (0.8 + 0.35 * height) * (1.0 + 0.15 * petals);
+    float3 nightLand = look.landNight.xyz * (0.8 + 0.35 * height);
     float3 nightSea = look.seaNight.xyz * (1.0 + 0.7 * shallow);
     nightSea = mix(nightSea, look.landNight.xyz * 0.9, raftAmount);
     float3 night = mix(nightLand, nightSea, water) * (0.75 + 0.25 * facing);
@@ -383,6 +369,133 @@ fragment half4 sakuraPetal(PetalFragmentIn in [[stage_in]],
     float3 night = look.landNight.xyz * (0.9 + 0.3 * base) + look.nightHaze.xyz * 0.2;
     float3 color = mix(night, day, lit);
     half4 result = finishColor(color, in.position.xy);
+    result.a = half(coverage);
+    return result;
+}
+
+static float3 sakuraTurn(float3 value, float3 axis, float angle) {
+    float cosine = cos(angle);
+    return value * cosine + cross(axis, value) * sin(angle) + axis * dot(axis, value) * (1.0 - cosine);
+}
+
+static float sakuraSettledTilt(float random) {
+    float lean = fract(random * 7.0);
+    return 0.32 * lean * lean;
+}
+
+vertex PetalFragmentIn sakuraBedVertex(uint vertexID [[vertex_id]],
+                                       uint instanceID [[instance_id]],
+                                       constant GlobeUniforms &uniforms [[buffer(0)]],
+                                       const device SakuraBedPetal *petals [[buffer(1)]],
+                                       constant EffectUniforms &effects [[buffer(2)]],
+                                       constant SurfaceUniforms &surface [[buffer(3)]],
+                                       const device uint *visible [[buffer(4)]]) {
+    SakuraBedPetal petal = petals[visible[instanceID]];
+    bool airborne = petal.timing.y > 0.0;
+    float progress = airborne ? saturate((surface.clock.x - petal.timing.x) / petal.timing.y) : 1.0;
+    float travel = 1.0 - (1.0 - progress) * (1.0 - progress);
+    float rise = sin(M_PI_F * travel);
+    float3 center = normalize(mix(petal.from.xyz, petal.to.xyz, travel));
+    float radius = mix(petal.from.w, petal.to.w, travel) + petal.timing.z * rise;
+    float yaw = mix(petal.pose.x, petal.pose.y, travel);
+    float gust = rise * saturate(length(petal.to.xyz - petal.from.xyz) * 8.0);
+    float cycles = petal.timing.y * mix(1.4, 2.6, fract(petal.timing.w * 23.0));
+    float swing = sin(2.0 * M_PI_F * (travel * cycles + fract(petal.timing.w * 41.0)));
+    float settle = airborne ? sakuraSettledTilt(petal.timing.w) : petal.pose.z;
+    float tilt = mix(petal.pose.z, settle, travel) + gust * 1.2 * swing;
+    float hinge = 2.0 * M_PI_F * fract(petal.timing.w * 17.0);
+    SurfaceFrame frame = surfaceFrame(center);
+    float3 along = frame.east * cos(yaw) + frame.north * sin(yaw);
+    float3 across = frame.north * cos(yaw) - frame.east * sin(yaw);
+    float3 axis = along * cos(hinge) + across * sin(hinge);
+    float3 spine = sakuraTurn(along, axis, tilt);
+    float3 span = sakuraTurn(across, axis, tilt);
+    float3 normal = sakuraTurn(center, axis, tilt);
+    float2 corner = float2(float(vertexID & 1u) * 2.0 - 1.0, float((vertexID >> 1) & 1u) * 2.0 - 1.0);
+    float3 rest = center * radius + (spine * corner.x + span * corner.y * 0.8) * petal.pose.w;
+    float3 world = surfacePlace(rest, effects);
+    if (effectsActive(effects)) {
+        float3 slope;
+        effectOffset(center, effects, slope);
+        normal = normalize(mix(center, normal, effects.radii.w) - slope);
+    }
+
+    PetalFragmentIn out;
+    out.position = projectToClip(world, uniforms);
+    out.worldPosition = world;
+    out.normal = normal;
+    out.local = corner;
+    out.fade = 1.0;
+    out.random = petal.timing.w;
+    return out;
+}
+
+fragment half4 sakuraBedPetal(PetalFragmentIn in [[stage_in]],
+                              bool front [[front_facing]],
+                              constant GlobeUniforms &uniforms [[buffer(0)]],
+                              constant SakuraLook &look [[buffer(1)]],
+                              constant EffectUniforms &effects [[buffer(2)]],
+                              texture2d<float> lightsTexture [[texture(1)]],
+                              sampler surfaceSampler [[sampler(0)]]) {
+    float2 pixel = in.position.xy;
+    bool shaped = effectsActive(effects);
+    float3 position = shaped ? effectUnshape(effects) * in.worldPosition : in.worldPosition;
+    float3 eye = shaped ? effectUnshape(effects) * uniforms.cameraPosition.xyz : uniforms.cameraPosition.xyz;
+    float3 nG = normalize(position);
+    float3 view = normalize(eye - position);
+    float3 sun = uniforms.sunDirection.xyz;
+    SurfaceCoordinates coordinates = surfaceCoordinates(nG);
+    float muG = dot(nG, sun);
+    float terminatorWidth = max(fwidth(muG), 0.012);
+    float outline = sakuraPetalShape(in.local);
+    float coverage = saturate(0.5 - outline / max(fwidth(outline), 1e-4));
+    if (coverage <= 0.0) {
+        discard_fragment();
+    }
+    gradient2d gradient = gradient2d(coordinates.dx, coordinates.dy);
+    gradient2d haloGradient = gradient2d(coordinates.dx * 6.0, coordinates.dy * 6.0);
+    float lights = lightsTexture.sample(surfaceSampler, coordinates.uv, gradient).r;
+    float lightsHalo = lightsTexture.sample(surfaceSampler, coordinates.uv, haloGradient).r;
+    float dayGate = smoothstep(-terminatorWidth, terminatorWidth, muG);
+    float nightGate = 1.0 - smoothstep(-0.1736, 0.0175, muG);
+
+    float3 normal = normalize(in.normal) * (front ? 1.0 : -1.0);
+    float nl = dot(normal, sun);
+    float diffuse = saturate((nl + look.wrap) / (1.0 + look.wrap));
+    float3 studioKey = normalize(-uniforms.cameraForward.xyz * 0.7 + uniforms.cameraUp.xyz * 0.6 - uniforms.cameraRight.xyz * 0.45);
+    float modelling = mix(0.86, 1.05, saturate(dot(normal, studioKey) * 0.5 + 0.5));
+    float base = saturate(0.5 - in.local.x * 0.5);
+    float3 petal = mix(look.petalLight.xyz, look.petalDeep.xyz, base * 0.85 + in.random * 0.2);
+    petal = mix(petal, look.blossomEye.xyz, smoothstep(0.6, 1.0, base) * 0.3);
+    float3 day = mix(petal * look.landShade.xyz * 1.15, petal, diffuse) * modelling;
+
+    float warmth = (1.0 - smoothstep(0.0, look.twilightWidth, muG)) * smoothstep(-0.07, 0.03, muG);
+    day = mix(day, day * look.dusk.xyz * 1.35, warmth * 0.4);
+    float back = saturate(dot(-view, sun));
+    float transmit = look.transmission * warmth * (0.3 + 0.7 * back) * (1.0 + look.petalTranslucency * saturate(0.2 - nl));
+
+    float facing = saturate(dot(normal, view));
+    float3 night = look.landNight.xyz * (0.85 + 0.35 * base + 0.1 * in.random) * (0.75 + 0.25 * facing);
+    night += look.landNight.xyz * look.nightLift * facing;
+
+    float3 color = mix(night, day, dayGate);
+    color += look.glow.xyz * transmit;
+    color += look.petalLight.xyz * look.sheen * pow(1.0 - facing, 4.0) * dayGate;
+
+    float city = (pow(lights, 1.5) + 0.3 * lightsHalo) * nightGate * look.cityGlow;
+    color += look.cityLight.xyz * city;
+
+    if (shaped) {
+        float pressWeight = effectWeight(nG, effects.dent.xyz, effects.radii.x);
+        float hollow = saturate(effects.state.z * effects.dent.w * pressWeight);
+        color = mix(color, color * look.landShade.xyz * 1.25, hollow);
+    }
+
+    float viewCosine = saturate(dot(nG, view));
+    float hazeAmount = look.haziness * pow(1.0 - viewCosine, 2.5);
+    color = mix(color, mix(look.nightHaze.xyz, look.haze.xyz, dayGate), hazeAmount);
+    color = mix(look.backdrop.xyz, color, uniforms.principal.z);
+    half4 result = finishColor(color, pixel);
     result.a = half(coverage);
     return result;
 }

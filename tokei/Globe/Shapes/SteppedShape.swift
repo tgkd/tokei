@@ -10,7 +10,7 @@ enum SteppedShape {
     static func lift(_ field: TerrainField) -> TerrainLift {
         let count = field.width * field.height
         let elevation = field.elevation().map { field.blurred($0, sigma: 0.35) } ?? [Float](repeating: 0, count: count)
-        let inland = ToyTerrain.smoothstep(0.1, 0.5, field.distance)
+        let inland = Self.inland(field)
         let levels = Float(thresholds.count)
         var heights = [Float](repeating: 0, count: count)
         var relief = [Float](repeating: 0, count: count)
@@ -30,5 +30,9 @@ enum SteppedShape {
             relief: { _ in 0 }
         )
         return TerrainLift(heights: heights, relief: relief, profile: profile)
+    }
+
+    static func inland(_ field: TerrainField) -> [Float] {
+        ToyTerrain.smoothstep(0.1, 0.5, field.distance)
     }
 }

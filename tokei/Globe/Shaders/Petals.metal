@@ -78,6 +78,7 @@ vertex PetalFragmentIn petalVertex(uint vertexID [[vertex_id]],
     float3 world = position + (across0 * corner.x + across1 * corner.y * 0.8) * size * max(grow, 1e-3);
 
     out.position = projectToClip(world, uniforms);
+    out.position.z = clamp(out.position.z, 0.0, max(out.position.w, 0.0));
     out.worldPosition = world;
     out.normal = normal;
     out.local = corner;

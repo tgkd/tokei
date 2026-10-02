@@ -49,10 +49,11 @@ enum MarkerLayout {
     ) -> [MarkerItem] {
         var visible: [(zone: Zone, anchor: CGPoint, fade: Double)] = []
         let cloudTop = CloudShell.lift(inflate: frame.effects.inflate)
+        let chipLift = frame.style.mesh?.chipLift ?? 0
         for zone in zones {
             guard let location = zone.location else { continue }
             let unit = location.unitVector
-            let ground = frame.effects.place(unit, surfaceRadius: surface?.radius(along: unit, in: frame) ?? 1)
+            let ground = frame.effects.place(unit, surfaceRadius: (surface?.radius(along: unit, in: frame) ?? 1) + chipLift)
             let facing = frame.visibility(of: ground)
             guard facing > 0 else { continue }
             let point = clouds?.covers(unit) == true ? frame.effects.place(unit, lift: cloudTop) : ground

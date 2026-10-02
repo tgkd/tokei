@@ -14,6 +14,8 @@ struct SakuraLook {
     var landLow: SIMD4<Float>
     var landHigh: SIMD4<Float>
     var landCrest: SIMD4<Float>
+    var paper: SIMD4<Float>
+    var komon: SIMD4<Float>
     var landShade: SIMD4<Float>
     var landNight: SIMD4<Float>
     var petalLight: SIMD4<Float>
@@ -32,10 +34,10 @@ struct SakuraLook {
     var shoreWidth: Float
     var clumpScale: Float
     var clumpDepth: Float
-    var blossomSize: Float
-    var blossomDensity: Float
-    var budSize: Float
-    var budDensity: Float
+    var paperShore: Float
+    var paperGrain: Float
+    var komonSize: Float
+    var komonDensity: Float
     var raftSize: Float
     var raftWidth: Float
     var raftDensity: Float
@@ -69,6 +71,8 @@ struct SakuraLook {
         landLow: .linear(0xF2ACBC),
         landHigh: .linear(0xF7C7D2),
         landCrest: .linear(0xFCE3EA),
+        paper: .linear(0xF9EDF0),
+        komon: .linear(0xEDC6D1),
         landShade: .linear(0xCB8098),
         landNight: .linear(0x4F4B7C),
         petalLight: .linear(0xFFF8FA),
@@ -87,10 +91,10 @@ struct SakuraLook {
         shoreWidth: 0.35,
         clumpScale: 70,
         clumpDepth: 0.07,
-        blossomSize: 0.42,
-        blossomDensity: 0.62,
-        budSize: 0.16,
-        budDensity: 0.7,
+        paperShore: 1.4,
+        paperGrain: 0.06,
+        komonSize: 1.5,
+        komonDensity: 0.6,
         raftSize: 0.1,
         raftWidth: 1.4,
         raftDensity: 0.75,
@@ -120,7 +124,14 @@ extension SceneLook {
         accent: Color(red: 0.878, green: 0.314, blue: 0.227),
         effects: .sakura,
         sound: .sakura,
-        mesh: MeshLook(fragment: "sakuraFragment", background: "sakuraBackground", petals: "sakuraPetal", shape: .puffy, parameters: SakuraLook.standard),
+        mesh: MeshLook(
+            fragment: "sakuraFragment",
+            background: "sakuraBackground",
+            petals: "sakuraPetal",
+            shape: .puffy,
+            parameters: SakuraLook.standard,
+            surface: SurfaceObjectsLook(kind: .petalBed, vertex: "sakuraBedVertex", fragment: "sakuraBedPetal", coverage: true, cullsBack: false)
+        ),
         petalDrift: PetalDriftLook(light: 0xFFF4F7, deep: 0xF2A3B7, rate: 1.6, speed: 38, lifetime: 14)
     )
 }
@@ -128,12 +139,12 @@ extension SceneLook {
 extension EffectTuning {
     static let sakura = EffectTuning(
         press: Press(
-            dentDepth: 0.035,
+            dentDepth: 0,
             dentRadius: 0.13,
-            dentShade: 5,
+            dentShade: 0,
             frost: 0,
             cracks: 0,
-            squash: 0.012,
+            squash: 0,
             pressSpring: Spring(duration: 0.2, bounce: 0),
             releaseSpring: Spring(duration: 0.5, bounce: 0.35)
         ),
@@ -158,9 +169,35 @@ extension EffectTuning {
             pop: 30,
             flingPerSpeed: 12,
             flingMaximum: 80,
-            stroke: 7,
-            strokeSpacing: 0.05,
             windPerSpeed: 0.09
+        ),
+        wind: Wind(
+            press: Wind.Gust(radius: 1.3, push: 1.0),
+            hop: Wind.Gust(radius: 0.045, push: 0.022),
+            outline: 0.28,
+            brush: Wind.Brush(
+                width: 0.9,
+                spacing: 0.3,
+                ahead: 2,
+                aheadLimit: 1.2,
+                aside: 0.35,
+                wobble: 0.4,
+                swell: 0.3,
+                wavelength: 2.5,
+                ragged: 0.75,
+                veer: 0.5,
+                curl: 0.45,
+                puff: 2.5
+            ),
+            jitter: 0.3,
+            veer: 0.3,
+            spin: .pi,
+            lift: 0.3,
+            shortest: 0.6,
+            longest: 1.5,
+            farthest: 0.12,
+            ceiling: 1.06,
+            stack: 48
         )
     )
 }

@@ -33,6 +33,8 @@ enum ToyShape: CaseIterable {
     case molten
     case terraced
     case stepped
+    case flat
+    case crust
 
     func lift(_ field: TerrainField) -> TerrainLift {
         switch self {
@@ -40,6 +42,8 @@ enum ToyShape: CaseIterable {
         case .molten: MoltenShape.lift(field)
         case .terraced: TerracedShape.lift(field)
         case .stepped: SteppedShape.lift(field)
+        case .flat: FlatShape.lift(field)
+        case .crust: CrustShape.lift(field)
         }
     }
 }

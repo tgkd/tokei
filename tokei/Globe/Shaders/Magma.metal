@@ -37,9 +37,9 @@ struct MagmaLook {
     float rimLight;
     float eruption;
     float pulse;
-    float fracture;
     float wrap;
-    float reserved;
+    float reserved1;
+    float reserved2;
 };
 
 struct MagmaCell {
@@ -63,6 +63,15 @@ static MagmaPoint magmaPoint(float3 normal) {
     return {asin(clamp(normal.y, -1.0, 1.0)), atan2(normal.x, normal.z), east, cross(normal, east), cosP};
 }
 
+static float3 magmaHash(float3 p) {
+    float3 scale = float3(0.1031, 0.1030, 0.0973);
+    p = fma(p, scale, -floor(p * scale));
+    float3 q = p.yxz + 33.33;
+    p += fma(p.z, q.z, fma(p.y, q.y, p.x * q.x));
+    float3 sum = p.xxy + p.yxx;
+    return fma(sum, p.zyx, -floor(sum * p.zyx));
+}
+
 static float magmaWrap(float angle) {
     return angle - 2.0 * M_PI_F * floor(angle / (2.0 * M_PI_F) + 0.5);
 }
@@ -78,7 +87,7 @@ static float magmaCos(float angle) {
 static float3 magmaSite(float row, float column, float rows, float seed, float band) {
     float latitude = M_PI_F * 0.5 - (row + 0.5) * band;
     float columns = max(floor(2.0 * rows * cos(latitude) + 0.5), 1.0);
-    float3 jitter = hash33(float3(row, column, seed));
+    float3 jitter = magmaHash(float3(row, column, seed));
     float delta = (0.35 - 0.7 * jitter.y) * band;
     return float3(latitude + delta, 2.0 * M_PI_F * (column + 0.15 + 0.7 * jitter.x) / columns - M_PI_F, 0.0);
 }
@@ -119,8 +128,8 @@ static MagmaCell magmaCell(MagmaPoint point, float rows, float seed) {
                 continue;
             }
             float c = column + float(dc);
-            float wrapped = c - columns * floor(c / columns);
-            float2 jitter = hash33(float3(r, wrapped, seed)).xy;
+            float wrapped = c < 0.0 ? c + columns : (c >= columns ? c - columns : c);
+            float2 jitter = magmaHash(float3(r, wrapped, seed)).xy;
             float delta = (0.35 - 0.7 * jitter.y) * band;
             float offset = magmaWrap((c + 0.15 + 0.7 * jitter.x) * spacing - M_PI_F - longitude);
             float chord;
@@ -179,36 +188,6 @@ static float3 magmaHeat(float temperature, constant MagmaLook &look) {
 static float magmaLine(float edge, float halfWidth, float pixelAngle) {
     float width = max(halfWidth, pixelAngle * 0.75);
     return (1.0 - smoothstep(width - pixelAngle * 0.5, width + pixelAngle * 0.5, edge)) * (halfWidth / width);
-}
-
-static float magmaSpokes(float3 point, float3 center, float radius, float amount, float pixelAngle) {
-    float3 helper = abs(center.y) < 0.9 ? float3(0.0, 1.0, 0.0) : float3(1.0, 0.0, 0.0);
-    float3 east = normalize(cross(helper, center));
-    float3 north = cross(center, east);
-    float3 offset = point - center * dot(point, center);
-    float distance = length(offset);
-    float reach = distance / radius;
-    if (reach > amount * 1.1 + 0.05 || dot(point, center) < 0.0) {
-        return 0.0;
-    }
-    float angle = atan2(dot(offset, north), dot(offset, east));
-    const float spokes = 7.0;
-    float sector = angle / (2.0 * M_PI_F) * spokes;
-    float line = 0.0;
-    for (int k = -1; k <= 1; k++) {
-        float index = floor(sector) + float(k);
-        float track = fmod(index + spokes * 8.0, spokes);
-        float3 random = hash33(float3(track, 3.0, 11.0));
-        float wander = sin(reach * (9.0 + 5.0 * random.z) + random.x * 6.2831853) * 0.18 / max(reach, 0.15);
-        float spokeAngle = (index + 0.5 + 0.6 * (random.x - 0.5)) * 2.0 * M_PI_F / spokes + wander;
-        float extent = amount * (0.6 + 0.5 * random.y);
-        float across = abs(sin(angle - spokeAngle)) * distance;
-        float taper = 1.0 - smoothstep(extent * 0.55, extent, reach);
-        float width = pixelAngle * (0.4 + 1.2 * taper);
-        float spoke = (1.0 - smoothstep(width * 0.5, width * 1.5, across)) * taper * step(0.0, cos(angle - spokeAngle));
-        line = max(line, spoke);
-    }
-    return line * smoothstep(0.02, 0.12, reach);
 }
 
 fragment half4 magmaFragment(MeshFragmentIn in [[stage_in]],
@@ -318,8 +297,7 @@ fragment half4 magmaFragment(MeshFragmentIn in [[stage_in]],
             detailSeam = hash33(float3(shard.pair, 9.0, 1.0)).x;
         }
 
-        float dome = look.pillow * resolved;
-        float3 crustNormal = normalize(landNormal + plate.away * dome * rows / M_PI_F + detailAway * look.pillow * 0.5 * detailRows / M_PI_F * detailResolved);
+        float3 crustNormal = normalize(landNormal + detailAway * look.pillow * 0.5 * detailRows / M_PI_F * detailResolved);
 
         float mountain = smoothstep(0.3, 0.65, relief);
         float summit = max(smoothstep(0.4, 0.55, relief) * smoothstep(0.03, 0.1, relief - regional), smoothstep(0.88, 1.0, relief));
@@ -425,10 +403,6 @@ fragment half4 magmaFragment(MeshFragmentIn in [[stage_in]],
     if (effectsActive(effects)) {
         float pressWeight = effectWeight(nG, effects.dent.xyz, effects.radii.x);
         color *= saturate(1.0 - effects.state.z * effects.dent.w * pressWeight);
-        if (effects.detail.y > 0.0) {
-            float spokes = magmaSpokes(nG, effects.dent.xyz, effects.radii.x, saturate(effects.detail.y), pixelAngle);
-            emission += magmaHeat(0.8, look) * spokes * look.fracture * onLand;
-        }
         emission += magmaHeat(0.7 + 0.3 * saturate(eruption), look) * eruption * look.eruption;
     }
 

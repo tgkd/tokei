@@ -50,8 +50,12 @@ static float gridValue(const device half *grid, int2 size, int x, int y) {
     return float(grid[row * size.x + column]);
 }
 
+static float gridLongitude(float3 direction) {
+    return length(direction.xz) > 1e-6 ? atan2(direction.x, direction.z) : 0.0;
+}
+
 static float2 gridPosition(float3 direction, float2 size) {
-    float longitude = atan2(direction.x, direction.z);
+    float longitude = gridLongitude(direction);
     float latitude = asin(clamp(direction.y, -1.0, 1.0));
     return float2((longitude / (2.0 * M_PI_F) + 0.5) * size.x - 0.5, (0.5 - latitude / M_PI_F) * size.y - 0.5);
 }
@@ -118,7 +122,7 @@ static float terrainHeight(float3 direction,
                            const device half *coast,
                            const device half *lift,
                            const device float4 *profile) {
-    float2 unit = float2(atan2(direction.x, direction.z) / (2.0 * M_PI_F) + 0.5, 0.5 - asin(clamp(direction.y, -1.0, 1.0)) / M_PI_F);
+    float2 unit = float2(gridLongitude(direction) / (2.0 * M_PI_F) + 0.5, 0.5 - asin(clamp(direction.y, -1.0, 1.0)) / M_PI_F);
     float distance = gridSample(coast, terrain.coast.xy, unit * terrain.coast.xy - 0.5);
     return profileAt(profile, terrain, distance).x + gridSample(lift, terrain.lift.xy, unit * terrain.lift.xy - 0.5);
 }

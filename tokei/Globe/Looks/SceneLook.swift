@@ -54,6 +54,8 @@ struct MeshLook {
     let snow: SnowSettings?
     let marks: MarkSettings?
     let blooms: BloomSettings?
+    let surface: SurfaceObjectsLook?
+    let chipLift: Double
 
     init<Parameters>(
         fragment: String,
@@ -65,7 +67,9 @@ struct MeshLook {
         parameters: Parameters,
         snow: SnowSettings? = nil,
         marks: MarkSettings? = nil,
-        blooms: BloomSettings? = nil
+        blooms: BloomSettings? = nil,
+        surface: SurfaceObjectsLook? = nil,
+        chipLift: Double = 0
     ) {
         self.fragment = fragment
         self.background = background
@@ -77,6 +81,8 @@ struct MeshLook {
         self.snow = snow
         self.marks = marks
         self.blooms = blooms
+        self.surface = surface
+        self.chipLift = chipLift
     }
 }
 

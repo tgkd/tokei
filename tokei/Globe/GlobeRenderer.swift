@@ -26,6 +26,7 @@ final class GlobeRenderer {
     private let backgroundPipelines: [String: MTLRenderPipelineState]
     private let cloudPipelines: [String: MTLRenderPipelineState]
     private let petalPipelines: [String: MTLRenderPipelineState]
+    private let surfacePipelines: [SurfacePipeline: MTLRenderPipelineState]
     private let presentPipeline: MTLRenderPipelineState
     private let meshDepthState: MTLDepthStencilState
     private let backgroundDepthState: MTLDepthStencilState
@@ -41,6 +42,10 @@ final class GlobeRenderer {
     let bloomField: BloomField?
     private let cloudShell: CloudShell?
     private var weatherTexture: (frame: WeatherFrame, texture: MTLTexture)?
+    private var surfaceSets: [SurfaceObjectKind: SurfaceObjectSet] = [:]
+    private var surfaceLoads: [SurfaceObjectKind: Task<Bool, Never>] = [:]
+    private var meshLoad: Task<Void, Never>?
+    private var shapeLoad: Task<Void, Never>?
     private var meshTargets: (color: MTLTexture, depth: MTLTexture)?
     private var pixelTargets: (color: MTLTexture, depth: MTLTexture)?
 
@@ -73,6 +78,7 @@ final class GlobeRenderer {
         let meshLooks = SceneStyle.allCases.compactMap(\.mesh)
         var meshPipelines: [String: MTLRenderPipelineState] = [:]
         var backgroundPipelines: [String: MTLRenderPipelineState] = [:]
+        var surfacePipelines: [SurfacePipeline: MTLRenderPipelineState] = [:]
         for look in meshLooks {
             let sampleCount = look.pixelSize == nil ? Self.meshSampleCount : 1
             if meshPipelines[look.fragment] == nil {
@@ -94,6 +100,21 @@ final class GlobeRenderer {
                 backgroundDescriptor.rasterSampleCount = sampleCount
                 guard backgroundDescriptor.fragmentFunction != nil, let state = try? device.makeRenderPipelineState(descriptor: backgroundDescriptor) else { return nil }
                 backgroundPipelines[background] = state
+            }
+            if let surface = look.surface, surfacePipelines[surface.pipeline] == nil {
+                let surfaceDescriptor = MTLRenderPipelineDescriptor()
+                surfaceDescriptor.vertexFunction = library.makeFunction(name: surface.vertex)
+                surfaceDescriptor.fragmentFunction = library.makeFunction(name: surface.fragment)
+                surfaceDescriptor.colorAttachments[0].pixelFormat = Self.pixelFormat
+                surfaceDescriptor.depthAttachmentPixelFormat = .depth32Float
+                surfaceDescriptor.rasterSampleCount = Self.meshSampleCount
+                surfaceDescriptor.isAlphaToCoverageEnabled = surface.coverage
+                guard
+                    surfaceDescriptor.vertexFunction != nil,
+                    surfaceDescriptor.fragmentFunction != nil,
+                    let state = try? device.makeRenderPipelineState(descriptor: surfaceDescriptor)
+                else { return nil }
+                surfacePipelines[surface.pipeline] = state
             }
         }
 
@@ -196,6 +217,7 @@ final class GlobeRenderer {
         self.backgroundPipelines = backgroundPipelines
         self.cloudPipelines = cloudPipelines
         self.petalPipelines = petalPipelines
+        self.surfacePipelines = surfacePipelines
         self.presentPipeline = presentPipeline
         self.meshDepthState = meshDepthState
         self.backgroundDepthState = backgroundDepthState
@@ -223,13 +245,49 @@ final class GlobeRenderer {
         }.value
         if first == nil {
             textures = loadedTextures
-            Task {
+            meshLoad = Task {
                 attach(await loadedMesh.value, first: nil)
             }
         } else {
             attach(await loadedMesh.value, first: first)
+            _ = await prepareSurfaceObjects(for: style)
             textures = loadedTextures
         }
+    }
+
+    func surfaceObjects(_ kind: SurfaceObjectKind) -> SurfaceObjectSet? {
+        surfaceSets[kind]
+    }
+
+    func prepareSurfaceObjects(for style: SceneStyle) async -> Bool {
+        guard let mesh = style.mesh, let kind = mesh.surface?.kind, surfaceSets[kind] == nil else { return false }
+        if let load = surfaceLoads[kind] {
+            return await load.value
+        }
+        let load = Task {
+            await loadSurfaceObjects(kind, shape: mesh.shape)
+        }
+        surfaceLoads[kind] = load
+        let loaded = await load.value
+        surfaceLoads[kind] = nil
+        return loaded
+    }
+
+    private func loadSurfaceObjects(_ kind: SurfaceObjectKind, shape key: ToyShape) async -> Bool {
+        if toyMesh?.shapes[key] == nil, let meshLoad {
+            await meshLoad.value
+        }
+        if toyMesh?.shapes[key] == nil, let shapeLoad {
+            await shapeLoad.value
+        }
+        guard let surface = toyMesh?.shapes[key]?.surface else { return false }
+        let device = device
+        let objects = await Task.detached(priority: .userInitiated) {
+            kind.build(surface: surface, device: device)
+        }.value
+        guard let objects else { return false }
+        surfaceSets[kind] = objects
+        return true
     }
 
     private func attach(_ mesh: ToyMesh?, first: ToyShape?) {
@@ -240,7 +298,7 @@ final class GlobeRenderer {
             mesh.markRelief(first)
             commandBuffer.commit()
         }
-        Task {
+        shapeLoad = Task {
             await completeShapes(of: mesh)
         }
     }
@@ -429,6 +487,44 @@ final class GlobeRenderer {
                     instanceCount: nodes.count
                 )
             }
+            if let surface = look.surface, look.pixelSize == nil, let objects = surfaceSets[surface.kind], let objectPipeline = surfacePipelines[surface.pipeline] {
+                let batches = objects.visible(in: frame, focal: uniforms.viewport.z)
+                if !batches.isEmpty {
+                    encoder.setRenderPipelineState(objectPipeline)
+                    encoder.setDepthStencilState(meshDepthState)
+                    encoder.setFrontFacing(.counterClockwise)
+                    encoder.setCullMode(surface.cullsBack ? .back : .none)
+                    encoder.setVertexBytes(&uniforms, length: MemoryLayout<GlobeUniforms>.stride, index: 0)
+                    encoder.setVertexBuffer(objects.instances, offset: 0, index: 1)
+                    encoder.setVertexBytes(&effects, length: MemoryLayout<EffectUniforms>.stride, index: 2)
+                    encoder.setVertexTexture(mesh.coast, index: 2)
+                    encoder.setVertexTexture(snowCover?.texture ?? placeholder, index: 4)
+                    encoder.setVertexSamplerState(surfaceSampler, index: 0)
+                    for batch in batches {
+                        let tier = objects.tiers[batch.tier]
+                        var objectUniforms = SurfaceUniforms(
+                            clock: SIMD4(Float(frame.effects.stirClock), Float(batch.tier), uniforms.viewport.z, 0),
+                            extra: .zero
+                        )
+                        encoder.setVertexBytes(&objectUniforms, length: MemoryLayout<SurfaceUniforms>.stride, index: 3)
+                        encoder.setFragmentBytes(&objectUniforms, length: MemoryLayout<SurfaceUniforms>.stride, index: 3)
+                        encoder.setVertexBuffer(batch.buffer, offset: batch.offset, index: 4)
+                        if let indices = tier.indices {
+                            encoder.drawIndexedPrimitives(
+                                type: tier.primitive,
+                                indexCount: tier.indexCount,
+                                indexType: .uint16,
+                                indexBuffer: indices,
+                                indexBufferOffset: 0,
+                                instanceCount: batch.count
+                            )
+                        } else {
+                            encoder.drawPrimitives(type: tier.primitive, vertexStart: 0, vertexCount: tier.vertexCount, instanceCount: batch.count)
+                        }
+                    }
+                    encoder.setCullMode(.back)
+                }
+            }
             if let name = look.clouds, look.pixelSize == nil, frame.weather != nil, let clouds = cloudPipelines[name], let cloudShell {
                 var shell = CloudShell.uniforms
                 encoder.setRenderPipelineState(clouds)
@@ -445,7 +541,6 @@ final class GlobeRenderer {
             if let name = look.petals, look.pixelSize == nil, let tuning = frame.style.effects.petals, !frame.petals.isEmpty, let petals = petalPipelines[name] {
                 encoder.setRenderPipelineState(petals)
                 encoder.setCullMode(.none)
-                encoder.setDepthClipMode(.clamp)
                 encoder.setVertexBytes(&uniforms, length: MemoryLayout<GlobeUniforms>.stride, index: 0)
                 for flight in frame.petals {
                     var burst = flight.uniforms(tuning: tuning)

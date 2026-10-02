@@ -79,11 +79,17 @@ struct SceneEffects: Equatable {
         let until: Date
     }
 
+    struct Stir: Equatable {
+        let epoch: Date
+        let until: Date
+    }
+
     var press: Press?
     var pop: Pop?
     var fling: Fling?
     var inflateStart: Date?
     var snow: Snow?
+    var stir: Stir?
     var petals: [PetalBurst] = []
 
     enum Cadence {
@@ -93,12 +99,12 @@ struct SceneEffects: Equatable {
     }
 
     var isEmpty: Bool {
-        press == nil && pop == nil && fling == nil && inflateStart == nil && snow == nil && petals.isEmpty
+        press == nil && pop == nil && fling == nil && inflateStart == nil && snow == nil && stir == nil && petals.isEmpty
     }
 
     var cadence: Cadence {
         let pressMoves = press.map { $0.release != nil || !$0.isAtRest } ?? false
-        if pressMoves || pop != nil || fling != nil || inflateStart != nil || !petals.isEmpty {
+        if pressMoves || pop != nil || fling != nil || inflateStart != nil || stir != nil || !petals.isEmpty {
             return .moving
         }
         return snow == nil ? .still : .refilling
@@ -148,6 +154,9 @@ struct SceneEffects: Equatable {
         if let snow {
             snapshot.snowClock = max(date.timeIntervalSince(snow.epoch), 0.001)
         }
+        if let stir {
+            snapshot.stirClock = max(date.timeIntervalSince(stir.epoch), 0)
+        }
         snapshot.shape = shape
         return snapshot
     }
@@ -176,6 +185,9 @@ struct SceneEffects: Equatable {
         if let snow, snow.until <= date {
             settled.snow = nil
         }
+        if let stir, stir.until <= date {
+            settled.stir = nil
+        }
         if let petalTuning = tuning.petals {
             settled.petals.removeAll { $0.end(tuning: petalTuning) <= date }
         } else {
@@ -192,6 +204,7 @@ struct SceneEffects: Equatable {
             fling.map { $0.start.addingTimeInterval(tuning.fling.spring.settlingDuration) },
             inflateStart.map { $0.addingTimeInterval(tuning.inflate?.settlingDuration ?? 0) },
             snow?.until,
+            stir?.until,
             petalEnd(tuning: tuning),
         ]
     }

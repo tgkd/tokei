@@ -49,6 +49,16 @@ struct PetalFragmentIn {
     float random [[flat]];
 };
 
+struct SurfaceUniforms {
+    float4 clock;
+    float4 extra;
+};
+
+struct SurfaceFrame {
+    float3 east;
+    float3 north;
+};
+
 struct SurfaceCoordinates {
     float2 uv;
     float2 dx;
@@ -349,4 +359,22 @@ static inline float3 rippleSlope(float3 direction, constant EffectUniforms &effe
     float3 slope;
     rippleWave(direction, effects, slope);
     return slope;
+}
+
+static inline float3 surfacePlace(float3 position, constant EffectUniforms &effects) {
+    if (!effectsActive(effects)) {
+        return position;
+    }
+    float radial = length(position);
+    float3 direction = position / radial;
+    float3 slope;
+    float radius = 1.0 + (radial - 1.0) * effects.radii.w + effectOffset(direction, effects, slope);
+    return effectShape(effects) * (direction * radius);
+}
+
+static inline SurfaceFrame surfaceFrame(float3 direction) {
+    float3 up = normalize(direction);
+    float ring = length(up.xz);
+    float3 east = ring > 1e-5 ? float3(up.z, 0.0, -up.x) / ring : float3(1.0, 0.0, 0.0);
+    return {east, cross(up, east)};
 }

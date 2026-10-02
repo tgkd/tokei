@@ -61,9 +61,43 @@ struct EffectTuning {
         var pop: Int
         var flingPerSpeed: Double
         var flingMaximum: Int
-        var stroke: Int
-        var strokeSpacing: Double
         var windPerSpeed: Double
+    }
+
+    struct Wind {
+        struct Gust {
+            var radius: Double
+            var push: Double
+        }
+
+        struct Brush {
+            var width: Double
+            var spacing: Double
+            var ahead: Double
+            var aheadLimit: Double
+            var aside: Double
+            var wobble: Double
+            var swell: Double
+            var wavelength: Double
+            var ragged: Double
+            var veer: Double
+            var curl: Double
+            var puff: Double
+        }
+
+        var press: Gust
+        var hop: Gust
+        var outline: Double
+        var brush: Brush
+        var jitter: Double
+        var veer: Double
+        var spin: Double
+        var lift: Double
+        var shortest: Double
+        var longest: Double
+        var farthest: Double
+        var ceiling: Double
+        var stack: Int
     }
 
     var press: Press
@@ -74,4 +108,5 @@ struct EffectTuning {
     var inflate: Spring?
     var drag = Drag()
     var petals: Petals?
+    var wind: Wind? = nil
 }

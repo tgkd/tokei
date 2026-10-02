@@ -38,9 +38,9 @@ struct MagmaLook {
     var rimLight: Float
     var eruption: Float
     var pulse: Float
-    var fracture: Float
     var wrap: Float
-    var reserved: Float = 0
+    var reserved1: Float = 0
+    var reserved2: Float = 0
 
     static let standard = MagmaLook(
         backdrop: .linear(0x0C0706),
@@ -79,7 +79,6 @@ struct MagmaLook {
         rimLight: 0.35,
         eruption: 1,
         pulse: 0.8,
-        fracture: 1,
         wrap: 0.15
     )
 }
@@ -94,7 +93,7 @@ extension SceneLook {
         mesh: MeshLook(
             fragment: "magmaFragment",
             background: "magmaBackground",
-            shape: .stepped,
+            shape: .crust,
             parameters: MagmaLook.standard,
             snow: SnowSettings(recovery: Double(MagmaLook.standard.recovery))
         )
@@ -106,9 +105,9 @@ extension EffectTuning {
         press: Press(
             dentDepth: 0.018,
             dentRadius: 0.12,
-            dentShade: 2,
+            dentShade: 0,
             frost: 0,
-            cracks: 0.9,
+            cracks: 0,
             squash: 0.005,
             pressSpring: Spring(duration: 0.34, bounce: 0),
             releaseSpring: Spring(duration: 0.7, bounce: 0.04)

@@ -42,7 +42,23 @@ struct MosaicLook {
     var patternTurns: Float
     var patternGrout: Float
     var vignette: Float
-    var reserved: Float = 0
+    var seaHeight: Float
+    var landHeight: Float
+    var heightJitter: Float
+    var landShare: Float
+    var bevel: Float
+    var bevelSlope: Float
+    var skirt: Float
+    var flipLift: Float
+    var glazeLine: Float
+    var wallShade: Float
+    var shadeHeight: Float
+    var groutShade: Float
+    var lightsLevel: Float
+    var cutWidth: Float
+    var cutShade: Float
+    var reserved1: Float = 0
+    var reserved2: Float = 0
 
     static let standard = MosaicLook(
         backdrop: .linear(0xA84A2F),
@@ -63,7 +79,7 @@ struct MosaicLook {
         cityLight: .linear(0xFFC27A),
         twilight: .linear(0xF0A070),
         tileSize: 2.7,
-        tileTilt: 0.1,
+        tileTilt: 0.05,
         glazeGloss: 300,
         glazeSpec: 0.5,
         groutWidth: 0.06,
@@ -77,14 +93,29 @@ struct MosaicLook {
         recovery: 4,
         flipThreshold: 0.25,
         flipSpread: 0.5,
-        rattle: 12,
+        rattle: 6,
         inflateSpan: 1.1,
         terminatorWidth: 0.02,
         cityGlow: 0.8,
         patternSize: 22,
         patternTurns: 6,
         patternGrout: 0.07,
-        vignette: 0.25
+        vignette: 0.25,
+        seaHeight: 0.005,
+        landHeight: 0.01,
+        heightJitter: 0.12,
+        landShare: 0.5,
+        bevel: 0.1,
+        bevelSlope: 0.5,
+        skirt: 0.002,
+        flipLift: 0.003,
+        glazeLine: 0.0015,
+        wallShade: 0.55,
+        shadeHeight: 0.005,
+        groutShade: 0.75,
+        lightsLevel: 0,
+        cutWidth: 0.14,
+        cutShade: 0.55
     )
 }
 
@@ -98,9 +129,11 @@ extension SceneLook {
         mesh: MeshLook(
             fragment: "mosaicFragment",
             background: "mosaicBackground",
-            shape: .puffy,
+            shape: .flat,
             parameters: MosaicLook.standard,
-            snow: SnowSettings(recovery: Double(MosaicLook.standard.recovery), footprints: false)
+            snow: SnowSettings(recovery: Double(MosaicLook.standard.recovery), footprints: false),
+            surface: SurfaceObjectsLook(kind: .tiles, vertex: "mosaicTileVertex", fragment: "mosaicTileFragment", coverage: false, cullsBack: true),
+            chipLift: Double(MosaicLook.standard.landHeight)
         ),
         popEcho: MosaicSound.cascadeHaptics
     )

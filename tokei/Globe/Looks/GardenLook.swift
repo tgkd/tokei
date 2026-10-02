@@ -23,6 +23,11 @@ struct GardenLook {
     var shore: SIMD4<Float>
     var bladeDeep: SIMD4<Float>
     var bladeTip: SIMD4<Float>
+    var bladeCool: SIMD4<Float>
+    var bladeStraw: SIMD4<Float>
+    var clover: SIMD4<Float>
+    var cloverMark: SIMD4<Float>
+    var cloverBloom: SIMD4<Float>
     var leaf: SIMD4<Float>
     var white: SIMD4<Float>
     var butter: SIMD4<Float>
@@ -32,6 +37,10 @@ struct GardenLook {
     var sky: SIMD4<Float>
     var coral: SIMD4<Float>
     var magenta: SIMD4<Float>
+    var plum: SIMD4<Float>
+    var cornflower: SIMD4<Float>
+    var indigo: SIMD4<Float>
+    var lavender: SIMD4<Float>
     var eye: SIMD4<Float>
     var eyeDark: SIMD4<Float>
     var moon: SIMD4<Float>
@@ -58,12 +67,18 @@ struct GardenLook {
     var groveLevel: Float
     var grassCell: Float
     var grassChance: Float
+    var grassLean: Float
+    var grassCurl: Float
+    var patchCell: Float
+    var cloverChance: Float
+    var meadowChance: Float
     var clusterCell: Float
     var clusterChance: Float
     var bouquetCell: Float
     var bouquetChance: Float
     var bouquetSize: Float
     var bouquetDelay: Float
+    var climateBias: Float
     var coastMargin: Float
     var grow: Float
     var hold: Float
@@ -79,8 +94,6 @@ struct GardenLook {
     var dappleCells: Float
     var dappleStrength: Float
     var grain: Float
-    var reserved1: Float = 0
-    var reserved2: Float = 0
 
     static let standard = GardenLook(
         backdrop: .linear(0xDDE7CF),
@@ -104,6 +117,11 @@ struct GardenLook {
         shore: .linear(0xE3D6A2),
         bladeDeep: .linear(0x2E7A26),
         bladeTip: .linear(0xC4E672),
+        bladeCool: .linear(0x4F9A6E),
+        bladeStraw: .linear(0xD9CC7F),
+        clover: .linear(0x3A8848),
+        cloverMark: .linear(0xCDE6B2),
+        cloverBloom: .linear(0xF8EAF0),
         leaf: .linear(0x3B8A33),
         white: .linear(0xFBF8F0),
         butter: .linear(0xFFD447),
@@ -113,6 +131,10 @@ struct GardenLook {
         sky: .linear(0x6CB6F2),
         coral: .linear(0xFF8C5A),
         magenta: .linear(0xD9418C),
+        plum: .linear(0x6C2C7C),
+        cornflower: .linear(0x3F6DE2),
+        indigo: .linear(0x2D3488),
+        lavender: .linear(0xA898E8),
         eye: .linear(0xF6C431),
         eyeDark: .linear(0x4A2C1A),
         moon: .linear(0xA9BCE0),
@@ -139,12 +161,18 @@ struct GardenLook {
         groveLevel: 0.42,
         grassCell: 2.0,
         grassChance: 0.85,
+        grassLean: 0.22,
+        grassCurl: 0.5,
+        patchCell: 9,
+        cloverChance: 0.2,
+        meadowChance: 0.22,
         clusterCell: 3.8,
         clusterChance: 0.8,
         bouquetCell: 6.5,
         bouquetChance: 1,
         bouquetSize: 0.38,
         bouquetDelay: 0.55,
+        climateBias: 0.3,
         coastMargin: 0.5,
         grow: 0.7,
         hold: 5,

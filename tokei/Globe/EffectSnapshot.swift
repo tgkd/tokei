@@ -39,11 +39,14 @@ struct EffectSnapshot: Equatable {
     var rippleDecay = 0.0
     var inflate = 1.0
     var snowClock = 0.0
+    var stirClock = 0.0
 
     static let none = EffectSnapshot()
 
     var isActive: Bool {
-        self != .none
+        var still = self
+        still.stirClock = 0
+        return still != .none
     }
 
     func place(_ direction: SIMD3<Double>, surfaceRadius: Double) -> SIMD3<Double> {

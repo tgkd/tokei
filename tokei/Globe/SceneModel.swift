@@ -23,6 +23,7 @@ final class SceneModel {
             if style.usesMesh && style != oldValue {
                 inflate(announced: true)
             }
+            prepareSurfaceObjects()
         }
     }
     var soundEnabled: Bool {
@@ -42,6 +43,7 @@ final class SceneModel {
                 markStroke = nil
                 renderer?.markMap?.reset()
                 marksRevision = renderer?.markMap?.revision ?? marksRevision
+                restoreWind()
             }
         }
     }
@@ -49,6 +51,7 @@ final class SceneModel {
         didSet {
             if reduceMotion {
                 effects.petals = []
+                landWind()
             }
         }
     }
@@ -58,7 +61,8 @@ final class SceneModel {
     @ObservationIgnored private var pressStart: Date?
     @ObservationIgnored private var pressTicket: SoundBoard.SoundTicket?
     @ObservationIgnored private var stroke: SurfaceStroke?
-    @ObservationIgnored private var petalTrail: SIMD3<Double>?
+    @ObservationIgnored private var petalWind: PetalWind?
+    @ObservationIgnored private var windStroke: WindStroke?
     @ObservationIgnored private var trainTicket: FeedbackTicket?
     @ObservationIgnored private var sequenceTicket: FeedbackTicket?
     @ObservationIgnored private var strikeTask: Task<Void, Never>?
@@ -66,6 +70,7 @@ final class SceneModel {
     private(set) var isGlobeReady = false
     private(set) var hasPlacedCamera = false
     private(set) var marksRevision = 0
+    private(set) var surfaceRevision = 0
     var striking: UUID?
     @ObservationIgnored private var markStroke: MarkStroke?
     @ObservationIgnored private var bloomStroke: BloomStroke?
@@ -89,6 +94,17 @@ final class SceneModel {
         isGlobeReady = renderer?.isReady ?? false
         if isGlobeReady && style.usesMesh {
             inflate(announced: false)
+        }
+        prepareSurfaceObjects()
+    }
+
+    private func prepareSurfaceObjects() {
+        guard let renderer, style.mesh?.surface != nil else { return }
+        let style = self.style
+        Task {
+            if await renderer.prepareSurfaceObjects(for: style) {
+                surfaceRevision += 1
+            }
         }
     }
 
@@ -131,7 +147,7 @@ final class SceneModel {
 
     var allowsSurfaceDrag: Bool {
         guard let mesh = style.mesh else { return false }
-        return mesh.snow != nil || mesh.marks != nil || mesh.blooms != nil || !reduceMotion
+        return mesh.snow != nil || mesh.marks != nil || mesh.blooms != nil || style.effects.wind != nil || !reduceMotion
     }
 
     func press(at point: SIMD3<Double>, footprint: Double) {
@@ -141,6 +157,11 @@ final class SceneModel {
         pressPoint = point
         pressFootprint = FootprintShape.random(radius: footprint)
         stampSnow(at: point, shape: pressFootprint)
+        if let wind = style.effects.wind {
+            blow { bed, clock, instant in
+                bed.gust(at: point, radius: footprint * wind.press.radius, push: footprint * wind.press.push, clock: clock, instant: instant)
+            }
+        }
         guard !reduceMotion else { return }
         effects.press = SceneEffects.Press(point: point, start: Date())
     }
@@ -182,6 +203,11 @@ final class SceneModel {
         if let blooms = style.mesh?.blooms {
             plantBlooms(blooms, at: point, radius: blooms.pop)
         }
+        if let wind = style.effects.wind {
+            blow { bed, clock, instant in
+                bed.gust(at: point, radius: wind.hop.radius, push: wind.hop.push, clock: clock, instant: instant)
+            }
+        }
         guard !reduceMotion else { return }
         effects.pop = SceneEffects.Pop(point: point, start: Date())
         if let petals = style.effects.petals {
@@ -205,7 +231,9 @@ final class SceneModel {
             }
         }
         self.stroke = stroke
-        petalTrail = nil
+        if let wind = style.effects.wind {
+            windStroke = activeWind()?.beginStroke(width: footprint * wind.brush.width, from: stroke.trail.last)
+        }
         if let marks = style.mesh?.marks {
             markStroke = MarkStroke(halfWidth: footprint * marks.width)
         }
@@ -236,11 +264,12 @@ final class SceneModel {
                 press.pull(to: point, at: now, spring: tuning.follow)
                 effects.press = press
             }
-            brushPetals(at: point)
+            sweepWind(to: point)
         } else {
             stroke.trail.last = nil
             markStroke?.last = nil
             bloomStroke?.last = nil
+            windStroke?.last = nil
         }
         if let strength = stroke.advance(to: location, at: now, onSurface: point != nil, spacing: tuning.grainSpacing) {
             feedback.grain(.carve, style: style, soundEnabled: soundEnabled, strength: strength)
@@ -254,6 +283,7 @@ final class SceneModel {
         cutPressIfReleasedEarly()
         markStroke = nil
         bloomStroke = nil
+        windStroke = nil
         guard var press = effects.press, press.release == nil else { return }
         press.release = Date()
         effects.press = press
@@ -262,16 +292,60 @@ final class SceneModel {
         }
     }
 
-    private func brushPetals(at point: SIMD3<Double>) {
-        guard let petals = style.effects.petals else { return }
-        guard let last = petalTrail else {
-            petalTrail = point
+    private func sweepWind(to point: SIMD3<Double>) {
+        guard var sweep = windStroke else { return }
+        blow { bed, clock, instant in
+            bed.sweep(to: point, stroke: &sweep, clock: clock, instant: instant)
+        }
+        windStroke = sweep
+    }
+
+    private func blow(_ move: (PetalWind, Double, Bool) -> Bool) {
+        guard let bed = activeWind() else { return }
+        if reduceMotion {
+            if move(bed, 0, true) {
+                surfaceRevision += 1
+            }
             return
         }
-        let travel = acos(min(max(dot(last, point), -1), 1))
-        guard travel >= petals.strokeSpacing else { return }
-        releasePetals(around: point, spread: petals.strokeSpacing * 0.6, count: petals.stroke, wind: normalize(point - last) * petals.windPerSpeed)
-        petalTrail = point
+        let now = Date()
+        if effects.stir == nil {
+            bed.commit()
+        }
+        let epoch = effects.stir?.epoch ?? now
+        guard move(bed, now.timeIntervalSince(epoch), false) else { return }
+        effects.stir = SceneEffects.Stir(epoch: epoch, until: epoch.addingTimeInterval(bed.end))
+        surfaceRevision += 1
+    }
+
+    private func activeWind() -> PetalWind? {
+        guard
+            let tuning = style.effects.wind,
+            let mesh = style.mesh,
+            mesh.surface?.kind == .petalBed,
+            let objects = renderer?.surfaceObjects(.petalBed),
+            let surface = renderer?.toyMesh?.shapes[mesh.shape]?.surface
+        else { return nil }
+        if let petalWind, petalWind.objects === objects {
+            return petalWind
+        }
+        let fresh = PetalWind(objects: objects, surface: surface, tuning: tuning)
+        petalWind = fresh
+        return fresh
+    }
+
+    private func landWind() {
+        guard effects.stir != nil else { return }
+        effects.stir = nil
+        petalWind?.commit()
+        surfaceRevision += 1
+    }
+
+    private func restoreWind() {
+        effects.stir = nil
+        guard let petalWind else { return }
+        petalWind.reset()
+        surfaceRevision += 1
     }
 
     private func releasePetals(around origin: SIMD3<Double>, spread: Double, count: Int, wind: SIMD3<Double> = .zero, delay: Double = 0) {
@@ -352,7 +426,6 @@ final class SceneModel {
     private func resetDisturbance() {
         stroke = nil
         pressPoint = nil
-        petalTrail = nil
         effects.snow = nil
         effects.petals = []
         renderer?.snowCover?.reset()
@@ -361,14 +434,21 @@ final class SceneModel {
         marksRevision = renderer?.markMap?.revision ?? marksRevision
         bloomStroke = nil
         renderer?.bloomField?.reset()
+        windStroke = nil
+        restoreWind()
     }
 
     func settleEffects() {
         let hadSnow = effects.snow != nil
+        let hadStir = effects.stir != nil
         effects = effects.settled(at: Date(), tuning: style.effects)
         if hadSnow && effects.snow == nil {
             renderer?.snowCover?.reset()
             renderer?.bloomField?.reset()
+        }
+        if hadStir && effects.stir == nil {
+            petalWind?.commit()
+            surfaceRevision += 1
         }
     }
 

@@ -35,7 +35,8 @@ struct GlobeScene: View {
                     effects: scene.effects.snapshot(at: context.date, tuning: scene.style.effects),
                     weather: scene.style.hasClouds ? weather.frame : nil,
                     petals: scene.style.mesh?.petals == nil ? [] : scene.effects.petalFlights(at: context.date, tuning: scene.style.effects),
-                    marks: scene.marksRevision
+                    marks: scene.marksRevision,
+                    surfaceRevision: scene.surfaceRevision
                 )
                 let clouds = CloudPresence(frame: frame, snow: scene.renderer?.snowCover)
                 let items = MarkerLayout.items(
